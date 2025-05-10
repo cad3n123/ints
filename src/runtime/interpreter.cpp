@@ -9,333 +9,6 @@
 #include <utility>
 #include <vector>
 
-DynamicArray::DynamicArray(const DynamicArray& dynamicArray)
-    : DynamicArray(dynamicArray.size) {
-    for (size_t i = 0; i < size; i++) data[i] = dynamicArray.data[i];
-}
-
-DynamicArray::DynamicArray(size_t size)
-    : data(std::make_unique<int[]>(size)), size(size) {}
-
-DynamicArray::DynamicArray(std::unique_ptr<int[]> data, size_t size)
-    : data(std::move(data)), size(size) {}
-
-DynamicArray DynamicArray::fromValue(const Value& value) {
-    return std::visit(
-        [](auto&& value) -> DynamicArray {
-            using T = std::decay_t<decltype(value)>;
-            constexpr bool isVector = std::is_same_v<T, std::vector<int>>;
-            constexpr bool isDynamic = std::is_same_v<T, DynamicArray>;
-            constexpr bool isFunctionDef =
-                std::is_same_v<T, std::shared_ptr<FunctionDefinitionNode>>;
-            if constexpr (isVector) {
-                DynamicArray result(value.size());
-                for (size_t i = 0; i < value.size(); i++) result[i] = value[i];
-                return result;
-            } else if constexpr (isDynamic) {
-                return DynamicArray(value);
-            } else if constexpr (isFunctionDef) {
-                return DynamicArray(0);
-            }
-        },
-        value.value);
-}
-
-int& DynamicArray::at(size_t i) {
-    if (i >= size) {
-        throw std::out_of_range("Index " + std::to_string(i) +
-                                " is out of bounds");
-    }
-    return data[i];
-}
-
-const int& DynamicArray::at(size_t i) const {
-    if (i >= size) {
-        throw std::out_of_range("Index " + std::to_string(i) +
-                                " is out of bounds");
-    }
-    return data[i];
-}
-
-DynamicArray::operator std::string() const {
-    std::string result = "[ ";
-    for (size_t i = 0; i < size; i++)
-        result += std::to_string(data[i]) + (i + 1 < size ? ", " : "");
-
-    result += " ]";
-    return result;
-}
-
-int& DynamicArray::operator[](size_t i) { return data[i]; }
-
-const int& DynamicArray::operator[](size_t i) const { return data[i]; }
-
-DynamicArray DynamicArray::operator+(const DynamicArray& other) {
-    if (size != other.size)
-        throw std::runtime_error("Cannot add arrays with different sizes");
-    DynamicArray result(size);
-    for (size_t i = 0; i < size; i++) result[i] = data[i] + other[i];
-    return result;
-}
-
-DynamicArray DynamicArray::operator-(const DynamicArray& other) {
-    if (size != other.size)
-        throw std::runtime_error("Cannot subtract arrays with different sizes");
-    DynamicArray result(size);
-    for (size_t i = 0; i < size; i++) result[i] = data[i] - other[i];
-    return result;
-}
-
-DynamicArray DynamicArray::operator*(const DynamicArray& other) {
-    if (size != other.size)
-        throw std::runtime_error("Cannot multiply arrays with different sizes");
-    DynamicArray result(size);
-    for (size_t i = 0; i < size; i++) result[i] = data[i] * other[i];
-    return result;
-}
-
-DynamicArray DynamicArray::operator/(const DynamicArray& other) {
-    if (size != other.size)
-        throw std::runtime_error("Cannot divide arrays with different sizes");
-    DynamicArray result(size);
-    for (size_t i = 0; i < size; i++) result[i] = data[i] / other[i];
-    return result;
-}
-
-bool DynamicArray::operator==(const DynamicArray& other) const {
-    if (size != other.size) return false;
-    for (size_t i = 0; i < size; i++)
-        if (data[i] != other[i]) return false;
-    return true;
-}
-
-bool DynamicArray::operator!=(const DynamicArray& other) const {
-    if (size != other.size) return false;
-    for (size_t i = 0; i < size; i++)
-        if (data[i] == other[i]) return false;
-    return true;
-}
-
-bool DynamicArray::operator<(const DynamicArray& other) const {
-    if (size != other.size) return false;
-    for (size_t i = 0; i < size; i++)
-        if (data[i] >= other[i]) return false;
-    return true;
-}
-
-bool DynamicArray::operator<=(const DynamicArray& other) const {
-    if (size != other.size) return false;
-    for (size_t i = 0; i < size; i++)
-        if (data[i] > other[i]) return false;
-    return true;
-}
-
-bool DynamicArray::operator>(const DynamicArray& other) const {
-    if (size != other.size) return false;
-    for (size_t i = 0; i < size; i++)
-        if (data[i] <= other[i]) return false;
-    return true;
-}
-
-bool DynamicArray::operator>=(const DynamicArray& other) const {
-    if (size != other.size) return false;
-    for (size_t i = 0; i < size; i++)
-        if (data[i] < other[i]) return false;
-    return true;
-}
-
-Value::Value(const Value& value) : value(value.value), minimum(value.minimum) {}
-
-Value::Value(std::variant<std::vector<int>, DynamicArray,
-                          std::shared_ptr<FunctionDefinitionNode>>
-                 value,
-             size_t minimum)
-    : value(std::move(value)), minimum(minimum) {}
-
-Value Value::fromDescriptor(const ArrayDescriptor& descriptor,
-                            std::optional<Value> value) {
-    if (descriptor.getCanGrow()) {
-        std::vector<int> dynamicArray;
-        if (descriptor.getSize().has_value()) {
-            dynamicArray.reserve(descriptor.getSize().value());
-        }
-        Value result(dynamicArray, dynamicArray.size());
-        if (value.has_value()) result = value.value();
-        return result;
-    } else {
-        if (descriptor.getSize().has_value()) {
-            auto size = descriptor.getSize().value();
-            Value result(DynamicArray(size), size);
-            if (value.has_value()) result = value.value();
-            return result;
-        } else {
-            if (value.has_value()) return Value(value.value());
-            throw std::runtime_error(
-                "Static array cannot be defined without a value");
-        }
-    }
-}
-
-size_t Value::getSize() const { return DynamicArray::fromValue(*this).size; }
-
-Value::operator std::string() const {
-    return std::string(DynamicArray::fromValue(*this));
-}
-
-Value& Value::operator=(const Value& other) {
-    std::visit(
-        [this, &other](auto&& this_arg) {
-            using T = std::decay_t<decltype(this_arg)>;
-            if constexpr (std::is_same_v<T, std::vector<int>>) {
-                std::visit(
-                    [this, &other, &this_arg](auto&& other_arg) {
-                        using T = std::decay_t<decltype(other_arg)>;
-                        constexpr bool isFunctionDefinition =
-                            std::is_same_v<T, FunctionDefinitionNode*>;
-                        if constexpr (std::is_same_v<T, std::vector<int>>) {
-                            if (this->minimum > other_arg.size())
-                                throw std::runtime_error(
-                                    "1Cannot set value. Destination minimum is "
-                                    "larger than the sources length");
-                            this_arg = other_arg;
-                        } else if constexpr (std::is_same_v<T, DynamicArray>) {
-                            if (this->minimum > other.minimum)
-                                throw std::runtime_error(
-                                    "2Cannot set value. Destination minimum (" +
-                                    std::to_string(this->minimum) +
-                                    ") is larger than the sources length (" +
-                                    std::to_string(other.minimum) + ")");
-                            for (size_t i = 0; i < this_arg.size(); i++) try {
-                                    this_arg[i] = other_arg.at(i);
-                                } catch (const std::out_of_range& e) {
-                                    this_arg[i] = 0;
-                                }
-                            for (size_t i = this_arg.size(); i < other_arg.size;
-                                 i++)
-                                this_arg.push_back(other_arg[i]);
-                        } else if constexpr (isFunctionDefinition) {
-                            throw std::runtime_error(
-                                "Cannot set dynamic array to function "
-                                "definition");
-                        }
-                    },
-                    other.value);
-            } else if constexpr (std::is_same_v<T, DynamicArray>) {
-                std::visit(
-                    [this, &other, &this_arg](auto&& other_arg) {
-                        using T = std::decay_t<decltype(other_arg)>;
-                        constexpr bool isFunctionDefinition =
-                            std::is_same_v<T, FunctionDefinitionNode*>;
-                        if constexpr (std::is_same_v<T, std::vector<int>>) {
-                            if (this->minimum != other_arg.size())
-                                throw std::runtime_error(
-                                    "3Cannot set value. Destination length is "
-                                    "not equal to the sources length");
-                            for (size_t i = 0; i < minimum; i++)
-                                this_arg[i] = other_arg[i];
-                        } else if constexpr (std::is_same_v<T, DynamicArray>) {
-                            if (this->minimum != other.minimum)
-                                throw std::runtime_error(
-                                    "4Cannot set value. Destination length is "
-                                    "not equal to the sources length");
-                            for (size_t i = 0; i < minimum; i++)
-                                this_arg[i] = other_arg[i];
-                        } else if constexpr (isFunctionDefinition) {
-                            throw std::runtime_error(
-                                "Cannot set array to function "
-                                "definition");
-                        }
-                    },
-                    other.value);
-            } else if constexpr (std::is_same_v<T, FunctionDefinitionNode*>) {
-                std::visit(
-                    [this, &other, &this_arg](auto&& other_arg) {
-                        using T = std::decay_t<decltype(other_arg)>;
-                        constexpr bool isFunctionDefinition =
-                            std::is_same_v<T, FunctionDefinitionNode*>;
-                        if constexpr (std::is_same_v<T, std::vector<int>> ||
-                                      std::is_same_v<T, DynamicArray>) {
-                            throw std::runtime_error(
-                                "Cannot identifier associated with a function "
-                                "to an array.");
-                        } else if constexpr (isFunctionDefinition) {
-                            this_arg = other_arg;
-                        }
-                    },
-                    other.value);
-            }
-        },
-        value);
-    return *this;
-}
-
-bool Value::sameSize(const Value& other) const {
-    return DynamicArray::fromValue(*this).size ==
-           DynamicArray::fromValue(other).size;
-}
-
-Value Value::operator+(const Value& other) {
-    if (!sameSize(other))
-        throw std::runtime_error("Cannot add arrays with different sizes");
-    DynamicArray left = DynamicArray::fromValue(*this);
-    DynamicArray right = DynamicArray::fromValue(other);
-    return Value(left + right, left.size);
-}
-
-Value Value::operator-(const Value& other) {
-    if (!sameSize(other))
-        throw std::runtime_error("Cannot subtract arrays with different sizes");
-    DynamicArray left = DynamicArray::fromValue(*this);
-    DynamicArray right = DynamicArray::fromValue(other);
-    return Value(left - right, left.size);
-}
-
-Value Value::operator*(const Value& other) {
-    if (!sameSize(other))
-        throw std::runtime_error("Cannot multiply arrays with different sizes");
-    DynamicArray left = DynamicArray::fromValue(*this);
-    DynamicArray right = DynamicArray::fromValue(other);
-    return Value(left * right, left.size);
-}
-
-Value Value::operator/(const Value& other) {
-    if (!sameSize(other))
-        throw std::runtime_error("Cannot divide arrays with different sizes");
-    DynamicArray left = DynamicArray::fromValue(*this);
-    DynamicArray right = DynamicArray::fromValue(other);
-    return Value(left / right, left.size);
-}
-
-bool Value::operator==(const Value& other) const {
-    if (!sameSize(other)) return false;
-    return DynamicArray::fromValue(*this) == DynamicArray::fromValue(other);
-}
-
-bool Value::operator!=(const Value& other) const {
-    if (!sameSize(other)) return false;
-    return DynamicArray::fromValue(*this) != DynamicArray::fromValue(other);
-}
-
-bool Value::operator<(const Value& other) const {
-    if (!sameSize(other)) return false;
-    return DynamicArray::fromValue(*this) < DynamicArray::fromValue(other);
-}
-
-bool Value::operator<=(const Value& other) const {
-    if (!sameSize(other)) return false;
-    return DynamicArray::fromValue(*this) <= DynamicArray::fromValue(other);
-}
-
-bool Value::operator>(const Value& other) const {
-    if (!sameSize(other)) return false;
-    return DynamicArray::fromValue(*this) > DynamicArray::fromValue(other);
-}
-
-bool Value::operator>=(const Value& other) const {
-    if (!sameSize(other)) return false;
-    return DynamicArray::fromValue(*this) >= DynamicArray::fromValue(other);
-}
-
 Scope::Scope(std::weak_ptr<Scope> parent) : parent(parent) {}
 
 bool Scope::has(const std::string& name) const {
@@ -352,7 +25,8 @@ bool Scope::hasRecursive(const std::string& name) const {
     return false;
 }
 
-const Value& Scope::get(const std::string& name) const {
+const std::variant<Value, std::shared_ptr<FunctionDefinitionNode>>& Scope::get(
+    const std::string& name) const {
     if (has(name)) return variables.at(name);
     if (auto parent_locked = parent.lock()) {
         return parent_locked->get(name);
@@ -360,7 +34,9 @@ const Value& Scope::get(const std::string& name) const {
     throw std::runtime_error("Undefined variable: " + name);
 }
 
-void Scope::set(const std::string& name, const Value& value) {
+void Scope::set(
+    const std::string& name,
+    const std::variant<Value, std::shared_ptr<FunctionDefinitionNode>>& value) {
     if (has(name)) {
         variables.insert_or_assign(name, value);
     } else if (auto parent_locked = parent.lock()) {
@@ -370,7 +46,9 @@ void Scope::set(const std::string& name, const Value& value) {
     }
 }
 
-void Scope::define(const std::string& name, const Value& value) {
+void Scope::define(
+    const std::string& name,
+    const std::variant<Value, std::shared_ptr<FunctionDefinitionNode>>& value) {
     variables.emplace(name, value);
 }
 
@@ -379,7 +57,7 @@ static void interpretFunctionDefinition(
     std::weak_ptr<Scope> parent) {
     if (auto lockedParent = parent.lock()) {
         lockedParent->define(functionDefinition->getIdentifier(),
-                             Value(functionDefinition, 0));
+                             functionDefinition);
     } else {
         throw std::runtime_error("Error interpreting function definition");
     }
@@ -412,7 +90,12 @@ static Value interpretArray(const std::shared_ptr<ArrayNode>& array,
                 if constexpr (isVector) {
                     return Value(arg, arg.size());
                 } else if constexpr (isString) {
-                    return lockedScope->get(arg);
+                    if (auto value = std::get_if<Value>(&lockedScope->get(arg)))
+                        return *value;
+                    else
+                        throw std::runtime_error(
+                            "Cannot use " + arg +
+                            " as an array, as it is defined as a function");
                 } else if constexpr (isFunctionCall) {
                     return interpretFunctionCall(arg, scope);
                 }
@@ -454,14 +137,10 @@ static Value applyAppend(const Value& value,
             using T = std::decay_t<decltype(arg)>;
             constexpr bool isVector = std::is_same_v<T, std::vector<int>>;
             constexpr bool isDynamic = std::is_same_v<T, DynamicArray>;
-            constexpr bool isFunctionDef =
-                std::is_same_v<T, std::shared_ptr<FunctionDefinitionNode>>;
             if constexpr (isVector) {
                 for (size_t i = 0; i < size1; i++) result[i] = arg[i];
             } else if constexpr (isDynamic) {
                 for (size_t i = 0; i < size1; i++) result[i] = arg[i];
-            } else if constexpr (isFunctionDef) {
-                throw std::runtime_error("Error interpreting append method");
             }
         },
         value.value);
@@ -470,14 +149,10 @@ static Value applyAppend(const Value& value,
             using T = std::decay_t<decltype(arg)>;
             constexpr bool isVector = std::is_same_v<T, std::vector<int>>;
             constexpr bool isDynamic = std::is_same_v<T, DynamicArray>;
-            constexpr bool isFunctionDef =
-                std::is_same_v<T, std::shared_ptr<FunctionDefinitionNode>>;
             if constexpr (isVector) {
                 for (size_t i = 0; i < size2; i++) result[size1 + i] = arg[i];
             } else if constexpr (isDynamic) {
                 for (size_t i = 0; i < size2; i++) result[size1 + i] = arg[i];
-            } else if constexpr (isFunctionDef) {
-                throw std::runtime_error("Error interpreting append method");
             }
         },
         param1->value);
@@ -540,9 +215,6 @@ static Value applyPostfix(const Value& value,
                                 std::is_same_v<T, std::vector<int>>;
                             constexpr bool isArray =
                                 std::is_same_v<T, DynamicArray>;
-                            constexpr bool isFunctionDefinition =
-                                std::is_same_v<
-                                    T, std::shared_ptr<FunctionDefinitionNode>>;
                             if constexpr (isVector) {
                                 for (size_t i = 0; i < newSize; i++) {
                                     result[i] = valueValue[i + start];
@@ -551,9 +223,6 @@ static Value applyPostfix(const Value& value,
                                 for (size_t i = 0; i < newSize; i++) {
                                     result[i] = valueValue[i + start];
                                 }
-                            } else if constexpr (isFunctionDefinition) {
-                                throw std::runtime_error(
-                                    "Error interpreting postfix");
                             }
                         },
                         resultValue->value);
@@ -654,8 +323,6 @@ static std::optional<Value> interpretForLoop(
             using T = std::decay_t<decltype(iterable)>;
             constexpr bool isVector = std::is_same_v<T, std::vector<int>>;
             constexpr bool isDynamicArray = std::is_same_v<T, DynamicArray>;
-            constexpr bool isFunctionDef =
-                std::is_same_v<T, std::shared_ptr<FunctionDefinitionNode>>;
             if constexpr (isVector) {
                 for (int element : iterable) {
                     auto scope = std::make_shared<Scope>(parentScope);
@@ -681,8 +348,6 @@ static std::optional<Value> interpretForLoop(
                     if (returnValue.has_value()) return returnValue.value();
                 }
                 return std::nullopt;
-            } else if constexpr (isFunctionDef) {
-                throw std::runtime_error("Error interpreting for loop");
             }
         },
         iterable.value);
@@ -773,26 +438,6 @@ static std::pair<std::optional<Value>, bool> interpretIf(
     return {std::nullopt, false};
 }
 
-// static void interpretFunctionCall(
-//     const std::shared_ptr<FunctionCallNode>& functionCall,
-//     std::weak_ptr<Scope> scope) {
-//     if (auto lockedScope = scope.lock()) {
-//         if (auto& function =
-//                 *std::get_if<std::shared_ptr<FunctionDefinitionNode>>(
-//                     &lockedScope->get(functionCall->getIdentifier()).value))
-//                     {
-//             interpretFunctionCall(
-//                 function, scope,
-//                 interpretParameters(functionCall->getParameters(), scope));
-//         } else {
-//             throw std::runtime_error("Unknown function " +
-//                                      functionCall->getIdentifier());
-//         }
-//     } else {
-//         throw std::runtime_error("Error interpreting function call");
-//     }
-// }
-
 static Value interpretReturn(const std::shared_ptr<ReturnNode>& returnNode,
                              std::weak_ptr<Scope> scope) {
     return interpretExpression(returnNode->getValue(), scope);
@@ -865,8 +510,7 @@ static Value interpretFunctionCall(
         if (lockedParent->hasRecursive(functionCall->getIdentifier())) {
             if (auto& functionDefinition =
                     *std::get_if<std::shared_ptr<FunctionDefinitionNode>>(
-                        &lockedParent->get(functionCall->getIdentifier())
-                             .value)) {
+                        &lockedParent->get(functionCall->getIdentifier()))) {
                 auto arguments =
                     interpretParameters(functionCall->getParameters(), parent);
                 auto scope = std::make_shared<Scope>(parent);
