@@ -1,0 +1,26 @@
+fn magnitude(vector: [1+]) -> [1] {
+    let sum: [1] = [0];
+    for x : vector {
+        sum = sum + x * x;
+    }
+    return sum.sqrt();
+}
+fn main() -> [] {
+    let x: [+] = [3, 4, -4][1:];
+    
+    let length: [1];
+
+    if let y: [1+] = x { 
+        length = magnitude(y);
+    } else {
+        length = [-1];
+    }
+
+    if length < [0] {
+        print("Empty Vector");
+    } else if length == [0] {
+        print("Length 0 Vector");
+    } else {
+        print("Length ".append(length + "0").append(" Vector"));
+    }
+}
