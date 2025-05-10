@@ -1,15 +1,21 @@
-# Compiler
+# Compiler settings
 CXX = g++
-CXXFLAGS = -Wall -Wextra -std=c++17
+CXXFLAGS = -Wall -Wextra -std=c++17 -Iinclude
 
-# Paths
+# Directories
 SRC_DIR = src
 OBJ_DIR = obj
 BIN = main
 
-# Sources and objects
-SRCS = $(wildcard $(SRC_DIR)/*.cpp)
-OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS))
+# Source layout
+LEXER_SRC     = $(wildcard $(SRC_DIR)/lexer/*.cpp)
+PARSER_SRC    = $(wildcard $(SRC_DIR)/parser/*.cpp)
+RUNTIME_SRC   = $(wildcard $(SRC_DIR)/runtime/*.cpp)
+UTIL_SRC      = $(wildcard $(SRC_DIR)/util/*.cpp)
+MAIN_SRC 	  = $(SRC_DIR)/main.cpp
+
+SRCS = $(LEXER_SRC) $(PARSER_SRC) $(RUNTIME_SRC) $(UTIL_SRC) $(MAIN_SRC)
+OBJS = $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(subst $(SRC_DIR)/,,$(SRCS)))
 
 # Default target
 all: $(BIN)
@@ -17,25 +23,20 @@ all: $(BIN)
 # Debug build
 DEBUG_FLAGS = -g -O0
 
-debug: clean
 debug: CXXFLAGS += $(DEBUG_FLAGS)
-debug: $(BIN)
+debug: clean $(BIN)
 
-# Linking
+# Link
 $(BIN): $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
-# Compiling
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
+# Compile to obj/
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
+	@mkdir "$(dir $@)" 2>NUL || exit 0
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Ensure obj directory exists
-$(OBJ_DIR):
-	@if not exist $(OBJ_DIR) mkdir $(OBJ_DIR)
-
-# Clean build artifacts
+# Clean rule (Windows-compatible)
 clean:
-	-@if exist $(BIN).exe del /Q $(BIN).exe
-	-@if exist $(OBJ_DIR) rmdir /S /Q $(OBJ_DIR)
-
-.PHONY: all clean
+	@if exist $(OBJ_DIR) rmdir /S /Q $(OBJ_DIR)
+	@if exist $(BIN).exe del /Q $(BIN).exe
+	@if exist $(BIN) del /Q $(BIN)

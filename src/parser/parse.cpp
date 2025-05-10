@@ -1,6 +1,6 @@
 // Copyright 2025 Caden Crowson
 
-#include "../include/parse.h"
+#include "parser/parse.h"
 
 #include <iostream>
 #include <memory>
@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "../include/error.h"
+#include "util/error.h"
 
 static const Token& expect(const std::vector<Token>& tokens, size_t i,
                            const std::string& source, TokenType type,

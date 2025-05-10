@@ -1,6 +1,6 @@
 // Copyright 2025 Caden Crowson
 
-#include "../include/error.h"
+#include "util/error.h"
 
 #include <exception>
 #include <string>

@@ -42,5 +42,4 @@ fn main() -> [+] {
     let doubled: [3] = double(nums);
     print(doubled + "000");
 }
-
 ```

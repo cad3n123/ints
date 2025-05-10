@@ -1,6 +1,6 @@
 // Copyright 2025 Caden Crowson
 
-#include "../include/interpreter.h"
+#include "runtime/interpreter.h"
 
 #include <cmath>
 #include <iostream>

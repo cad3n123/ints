@@ -4,10 +4,10 @@
 #include <string>
 #include <utility>
 
-#include "../include/file.h"
-#include "../include/interpreter.h"
-#include "../include/parse.h"
-#include "../include/tokenize.h"
+#include "lexer/tokenize.h"
+#include "parser/parse.h"
+#include "runtime/interpreter.h"
+#include "util/file.h"
 
 int main() {
     const std::string code = readCode("test.ints");

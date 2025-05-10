@@ -1,13 +1,13 @@
 // Copyright 2025 Caden Crowson
 
-#include "../include/tokenize.h"
+#include "lexer/tokenize.h"
 
 #include <cctype>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
-#include "../include/error.h"
+#include "util/error.h"
 
 static std::string collectWhile(const std::string& code, size_t& i,
                                 size_t& char_num, int (*predicate)(int)) {

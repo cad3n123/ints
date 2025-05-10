@@ -8,7 +8,7 @@
 #include <variant>
 #include <vector>
 
-#include "../include/tokenize.h"
+#include "lexer/tokenize.h"
 
 class ArrayRangeNode {
  public:
