@@ -185,13 +185,13 @@ Value& Value::operator=(const Value& other) {
                         if constexpr (std::is_same_v<T, std::vector<int>>) {
                             if (this->minimum > other_arg.size())
                                 throw std::runtime_error(
-                                    "1Cannot set value. Destination minimum is "
+                                    "Cannot set value. Destination minimum is "
                                     "larger than the sources length");
                             this_arg = other_arg;
                         } else if constexpr (std::is_same_v<T, DynamicArray>) {
                             if (this->minimum > other.minimum)
                                 throw std::runtime_error(
-                                    "2Cannot set value. Destination minimum (" +
+                                    "Cannot set value. Destination minimum (" +
                                     std::to_string(this->minimum) +
                                     ") is larger than the sources length (" +
                                     std::to_string(other.minimum) + ")");
@@ -213,14 +213,14 @@ Value& Value::operator=(const Value& other) {
                         if constexpr (std::is_same_v<T, std::vector<int>>) {
                             if (this->minimum != other_arg.size())
                                 throw std::runtime_error(
-                                    "3Cannot set value. Destination length is "
+                                    "Cannot set value. Destination length is "
                                     "not equal to the sources length");
                             for (size_t i = 0; i < minimum; i++)
                                 this_arg[i] = other_arg[i];
                         } else if constexpr (std::is_same_v<T, DynamicArray>) {
                             if (this->minimum != other.minimum)
                                 throw std::runtime_error(
-                                    "4Cannot set value. Destination length is "
+                                    "Cannot set value. Destination length is "
                                     "not equal to the sources length");
                             for (size_t i = 0; i < minimum; i++)
                                 this_arg[i] = other_arg[i];

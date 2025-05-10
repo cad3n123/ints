@@ -90,6 +90,9 @@ class FunctionCallNode {
 
 class ArrayNode {
  public:
+    explicit ArrayNode(std::variant<std::vector<int>, std::string,
+                                    std::shared_ptr<FunctionCallNode>>
+                           value);
     static ArrayNode parse(std::vector<Token> &tokens, size_t &i);
     static std::vector<int> stringToInts(const std::string &string);
     operator std::string() const;
@@ -98,9 +101,6 @@ class ArrayNode {
     getValue() const;
 
  private:
-    explicit ArrayNode(std::variant<std::vector<int>, std::string,
-                                    std::shared_ptr<FunctionCallNode>>
-                           value);
     std::variant<std::vector<int>, std::string,
                  std::shared_ptr<FunctionCallNode>>
         value;

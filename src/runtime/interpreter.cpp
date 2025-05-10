@@ -549,7 +549,7 @@ static Value interpretFunctionCall(
     }
 }
 
-void interpret(const RootNode& root) {
+void interpret(const RootNode& root, std::vector<std::string> args) {
     auto scope = std::make_shared<Scope>();
     for (auto value : root.getValues()) {
         std::visit(
@@ -563,10 +563,21 @@ void interpret(const RootNode& root) {
             value);
     }
     if (scope->has("main")) {
+        std::vector<int> commandLineArgs;
+        for (std::string arg : args) {
+            commandLineArgs.push_back(arg.size());
+            for (char c : arg) commandLineArgs.push_back(c);
+        }
+
+        std::vector<std::shared_ptr<ExpressionNode>> mainArgs = {
+            std::make_shared<ExpressionNode>(
+                std::make_shared<ArrayNode>(commandLineArgs),
+                ArrayPostFixNode(
+                    std::vector<std::variant<std::shared_ptr<ArrayRangeNode>,
+                                             std::shared_ptr<MethodNode>>>()))};
+
         interpretFunctionCall(
-            std::make_shared<FunctionCallNode>(
-                std::string("main"),
-                std::vector<std::shared_ptr<ExpressionNode>>()),
+            std::make_shared<FunctionCallNode>(std::string("main"), mainArgs),
             scope);
     }
 }

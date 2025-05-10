@@ -2,7 +2,7 @@ fn double(x: [+]) -> [+] {
     return x + x;
 }
 
-fn main() -> [+] {
+fn main(args: [+]) -> [+] {
     let nums: [3] = [1, 2, 3];
     let doubled: [3] = double(nums);
     print(doubled + "000");

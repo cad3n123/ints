@@ -35,4 +35,4 @@ class Scope {
         variables;
 };
 
-void interpret(const RootNode& root);
+void interpret(const RootNode& root, std::vector<std::string> args);
