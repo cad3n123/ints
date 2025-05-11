@@ -57,7 +57,9 @@ static std::string nTabs(size_t n) {
 }
 
 RootNode RootNode::parse(std::vector<Token>& tokens) {
-    std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>>> values;
+    std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>,
+                             std::shared_ptr<UseNode>>>
+        values;
     size_t numTokens = tokens.size();
     size_t i = 0;
     while (i < numTokens) {
@@ -67,10 +69,15 @@ RootNode RootNode::parse(std::vector<Token>& tokens) {
                     values.push_back(std::make_shared<FunctionDefinitionNode>(
                         FunctionDefinitionNode::parse(tokens, i)));
                     break;
+                } else if (tokens[i].getValue() == "use") {
+                    values.push_back(
+                        std::make_shared<UseNode>(UseNode::parse(tokens, i)));
+                    break;
                 }
                 [[fallthrough]];
             default:
-                throw std::runtime_error("Expected fn");
+                throw std::runtime_error(tokens[i].getValue() +
+                                         ". Expected use or fn");
         }
     }
     return RootNode(std::move(values));
@@ -82,8 +89,13 @@ RootNode::operator std::string() const {
         std::visit(
             [&result](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<
-                                  T, std::shared_ptr<FunctionDefinitionNode>>) {
+                constexpr bool isFunctionDef =
+                    std::is_same_v<T, std::shared_ptr<FunctionDefinitionNode>>;
+                constexpr bool isUse =
+                    std::is_same_v<T, std::shared_ptr<UseNode>>;
+                if constexpr (isFunctionDef) {
+                    result += arg->toStringIndented(0) + "\n";
+                } else if constexpr (isUse) {
                     result += arg->toStringIndented(0) + "\n";
                 }
             },
@@ -93,7 +105,9 @@ RootNode::operator std::string() const {
 }
 
 RootNode::RootNode(
-    std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>>> values)
+    std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>,
+                             std::shared_ptr<UseNode>>>
+        values)
     : values(std::move(values)) {}
 
 FunctionParameterNode FunctionParameterNode::parse(std::vector<Token>& tokens,
@@ -1099,7 +1113,8 @@ ArrayRangeNode::operator std::string() const {
     return result;
 }
 
-const std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>>>&
+const std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>,
+                               std::shared_ptr<UseNode>>>&
 RootNode::getValues() const {
     return values;
 }
@@ -1277,3 +1292,17 @@ ExpressionNode::ExpressionNode(std::vector<int> values)
       postfix(ArrayPostFixNode(
           std::vector<std::variant<std::shared_ptr<ArrayRangeNode>,
                                    std::shared_ptr<MethodNode>>>())) {}
+
+UseNode UseNode::parse(std::vector<Token>& tokens, size_t& i) {
+    expect(tokens, i, "use", TokenType::IDENTIFIER, "use");
+    ++i;
+    return UseNode(std::make_shared<ArrayNode>(ArrayNode::parse(tokens, i)));
+}
+
+const std::shared_ptr<ArrayNode>& UseNode::getValue() const { return value; }
+
+UseNode::UseNode(std::shared_ptr<ArrayNode> value) : value(std::move(value)) {}
+
+std::string UseNode::toStringIndented(size_t indent) const {
+    return nTabs(indent) + " " + std::string(*value);
+}

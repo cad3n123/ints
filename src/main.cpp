@@ -5,10 +5,7 @@
 #include <utility>
 #include <vector>
 
-#include "lexer/tokenize.h"
-#include "parser/parse.h"
 #include "runtime/interpreter.h"
-#include "util/file.h"
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -22,10 +19,7 @@ int main(int argc, char* argv[]) {
         args.emplace_back(argv[i]);
     }
 
-    const std::string code = readCode(filename);
-    auto tokens = tokenize(code);
-    auto root = RootNode::parse(tokens);
-    interpret(root, argc - 2, args);
+    interpret(filename, argc - 2, args);
 
     return 0;
 }

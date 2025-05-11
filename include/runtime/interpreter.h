@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <utility>
 #include <variant>
+#include<vector>
 
 #include "parser/parse.h"
 #include "runtime/value.h"
@@ -35,4 +36,5 @@ class Scope {
         variables;
 };
 
-void interpret(const RootNode& root, int argc, std::vector<std::string> args);
+void interpret(const std::string& filename, int argc,
+               std::vector<std::string> args);

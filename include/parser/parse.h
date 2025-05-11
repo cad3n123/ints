@@ -367,16 +367,31 @@ class FunctionDefinitionNode {
     std::shared_ptr<BodyNode> body;
 };
 
+class UseNode {
+ public:
+    static UseNode parse(std::vector<Token> &tokens, size_t &i);
+    const std::shared_ptr<ArrayNode> &getValue() const;
+    std::string toStringIndented(size_t indent) const;
+
+ private:
+    explicit UseNode(std::shared_ptr<ArrayNode> value);
+    std::shared_ptr<ArrayNode> value;
+};
+
 class RootNode {
  public:
     static RootNode parse(std::vector<Token> &tokens);
     operator std::string() const;
-    const std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>>> &
+    const std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>,
+                                   std::shared_ptr<UseNode>>> &
     getValues() const;
 
  private:
     explicit RootNode(
-        std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>>>
+        std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>,
+                                 std::shared_ptr<UseNode>>>
             values);
-    std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>>> values;
+    std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>,
+                             std::shared_ptr<UseNode>>>
+        values;
 };

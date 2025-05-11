@@ -9,6 +9,10 @@
 #include <utility>
 #include <vector>
 
+#include "lexer/tokenize.h"
+#include "parser/parse.h"
+#include "util/file.h"
+
 Scope::Scope(std::weak_ptr<Scope> parent) : parent(parent) {}
 
 bool Scope::has(const std::string& name) const {
@@ -514,6 +518,15 @@ static std::optional<Value> interpretBody(const std::shared_ptr<BodyNode>& body,
     return std::nullopt;
 }
 
+static std::string valueToString(const Value& value) {
+    auto array = DynamicArray::fromValue(value);
+    std::string result;
+    result.reserve(array.size);
+    for (size_t i = 0; i < array.size; i++)
+        result += static_cast<char>(array.data[i]);
+    return result;
+}
+
 static Value interpretPrint(
     const std::shared_ptr<FunctionCallNode>& functionCall,
     std::weak_ptr<Scope> scope) {
@@ -521,13 +534,8 @@ static Value interpretPrint(
         throw std::runtime_error(
             "Function print expected 1 argument but received " +
             functionCall->getParameters().size());
-    auto param1 = DynamicArray::fromValue(
-        interpretExpression(functionCall->getParameters()[0], scope));
-    std::string result;
-    result.reserve(param1.size);
-    for (size_t i = 0; i < param1.size; i++)
-        result += static_cast<char>(param1.data[i]);
-    std::cout << result;
+    auto param1 = interpretExpression(functionCall->getParameters()[0], scope);
+    std::cout << valueToString(param1);
 
     return Value(DynamicArray(0), 0);
 }
@@ -578,19 +586,42 @@ static Value interpretFunctionCall(
     }
 }
 
-void interpret(const RootNode& root, int argc, std::vector<std::string> args) {
-    auto scope = std::make_shared<Scope>();
+static void interpretFile(const std::string& filename,
+                          std::shared_ptr<Scope> scope);
+
+static void interpretUse(const std::shared_ptr<UseNode>& use,
+                         std::shared_ptr<Scope> scope) {
+    auto filename = valueToString(interpretArray(use->getValue(), scope));
+    interpretFile(filename, scope);
+}
+
+static void interpretFile(const std::string& filename,
+                          std::shared_ptr<Scope> scope) {
+    const std::string code = readCode(filename);
+    auto tokens = tokenize(code);
+    auto root = RootNode::parse(tokens);
     for (auto value : root.getValues()) {
         std::visit(
             [&scope](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<
-                                  T, std::shared_ptr<FunctionDefinitionNode>>) {
+                constexpr bool isFunctionDef =
+                    std::is_same_v<T, std::shared_ptr<FunctionDefinitionNode>>;
+                constexpr bool isUse =
+                    std::is_same_v<T, std::shared_ptr<UseNode>>;
+                if constexpr (isFunctionDef) {
                     interpretFunctionDefinition(arg, scope);
+                } else if constexpr (isUse) {
+                    interpretUse(arg, scope);
                 }
             },
             value);
     }
+}
+
+void interpret(const std::string& filename, int argc,
+               std::vector<std::string> args) {
+    auto scope = std::make_shared<Scope>();
+    interpretFile(filename, scope);
     if (scope->has("main")) {
         std::vector<int> commandLineArgs;
         for (std::string arg : args) {
