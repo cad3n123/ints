@@ -138,6 +138,8 @@ FunctionDefinitionNode FunctionDefinitionNode::parse(std::vector<Token>& tokens,
     while (i < tokens.size() && !(tokens[i] == Token(TokenType::SYMBOL, ")"))) {
         params.emplace_back(std::make_shared<FunctionParameterNode>(
             FunctionParameterNode::parse(tokens, i)));
+        if (i < tokens.size() && tokens[i] == Token(TokenType::SYMBOL, ","))
+            ++i;
     }
     expect(tokens, i, "Function Definition", TokenType::SYMBOL, ")");
     ++i;
@@ -730,6 +732,10 @@ ArrayRangeNode ArrayRangeNode::parse(std::vector<Token>& tokens, size_t& i) {
     if (i < tokens.size() && tokens[i].getType() == TokenType::INT_LIT) {
         start = std::stoi(tokens[i].getValue());
         ++i;
+        if (i < tokens.size() && tokens[i] == Token(TokenType::SYMBOL, "]")) {
+            ++i;
+            return ArrayRangeNode(start, start.value() + 1);
+        }
     }
     expect(tokens, i, "Array Range", TokenType::SYMBOL, ":");
     ++i;
@@ -1207,3 +1213,9 @@ IfDeclarationNode::getVariableDeclaration() const {
 const std::shared_ptr<ExpressionNode>& ReturnNode::getValue() const {
     return value;
 }
+
+ExpressionNode::ExpressionNode(std::vector<int> values)
+    : primary(std::make_shared<ArrayNode>(values)),
+      postfix(ArrayPostFixNode(
+          std::vector<std::variant<std::shared_ptr<ArrayRangeNode>,
+                                   std::shared_ptr<MethodNode>>>())) {}

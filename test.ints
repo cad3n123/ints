@@ -1,9 +1,11 @@
-fn double(x: [+]) -> [+] {
-    return x + x;
+fn main(argc: [1], argv: [+]) -> [+] {
+    if argc < [1] {
+        print("Usage: <filename> [args...]\n");
+    } else {
+        let fileName: [+] = getFileName(argc, argv);
+    }
 }
 
-fn main(args: [+]) -> [+] {
-    let nums: [3] = [1, 2, 3];
-    let doubled: [3] = double(nums);
-    print(doubled + "000");
+fn getFileName(argc: [1], argv: [2+]) -> [+] {
+    let fileNameLength: [1] = argv[0:1];
 }

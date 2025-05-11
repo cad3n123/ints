@@ -162,12 +162,21 @@ static Value applyAppend(const Value& value,
 static Value applySqrt(const Value& value,
                        std::vector<std::shared_ptr<Value>> parameters) {
     if (parameters.size() != 0)
-        throw std::runtime_error("sqrt expects 0 argument with type []");
+        throw std::runtime_error("sqrt expects 0 arguments");
     DynamicArray fixedValue = DynamicArray::fromValue(value);
     DynamicArray result(fixedValue.size);
     for (size_t i = 0; i < fixedValue.size; i++)
         result[i] = sqrt(fixedValue[i]);
     return Value(result, result.size);
+}
+
+static Value applySize(const Value& value,
+                       std::vector<std::shared_ptr<Value>> parameters) {
+    if (parameters.size() != 0)
+        throw std::runtime_error("size expects 0 arguments");
+    DynamicArray result(1);
+    result[0] = value.getSize();
+    return Value(result, 1);
 }
 
 static Value applyMethod(const Value& value,
@@ -178,6 +187,8 @@ static Value applyMethod(const Value& value,
         return applyAppend(value, parameters);
     else if (method->getIdentifier() == "sqrt")
         return applySqrt(value, parameters);
+    else if (method->getIdentifier() == "size")
+        return applySize(value, parameters);
     else
         throw std::runtime_error("Unknown method " + method->getIdentifier());
 }
@@ -549,7 +560,7 @@ static Value interpretFunctionCall(
     }
 }
 
-void interpret(const RootNode& root, std::vector<std::string> args) {
+void interpret(const RootNode& root, int argc, std::vector<std::string> args) {
     auto scope = std::make_shared<Scope>();
     for (auto value : root.getValues()) {
         std::visit(
@@ -570,14 +581,17 @@ void interpret(const RootNode& root, std::vector<std::string> args) {
         }
 
         std::vector<std::shared_ptr<ExpressionNode>> mainArgs = {
-            std::make_shared<ExpressionNode>(
-                std::make_shared<ArrayNode>(commandLineArgs),
-                ArrayPostFixNode(
-                    std::vector<std::variant<std::shared_ptr<ArrayRangeNode>,
-                                             std::shared_ptr<MethodNode>>>()))};
+            std::make_shared<ExpressionNode>(std::vector<int>{argc}),
+            std::make_shared<ExpressionNode>(commandLineArgs)
+            };
 
-        interpretFunctionCall(
-            std::make_shared<FunctionCallNode>(std::string("main"), mainArgs),
-            scope);
+        try {
+            interpretFunctionCall(std::make_shared<FunctionCallNode>(
+                                      std::string("main"), mainArgs),
+                                  scope);
+        } catch (const std::exception& e) {
+            std::cerr << "Error: " << e.what() << '\n';
+            exit(1);
+        }
     }
 }

@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
     const std::string code = readCode(filename);
     auto tokens = tokenize(code);
     auto root = RootNode::parse(tokens);
-    interpret(root, args);
+    interpret(root, argc - 2, args);
 
     return 0;
 }

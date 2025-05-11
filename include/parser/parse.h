@@ -130,6 +130,7 @@ class ExpressionNode {
                                 std::shared_ptr<ArrayNode>>
                        primary,
                    ArrayPostFixNode postfix);
+    explicit ExpressionNode(std::vector<int> values);
     static ExpressionNode parse(std::vector<Token> &tokens, size_t &i);
     operator std::string() const;
     const std::variant<std::shared_ptr<ArithmeticNode>,
