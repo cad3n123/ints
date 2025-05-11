@@ -727,29 +727,53 @@ ArrayNode::ArrayNode(std::variant<std::vector<int>, std::string,
 ArrayRangeNode ArrayRangeNode::parse(std::vector<Token>& tokens, size_t& i) {
     expect(tokens, i, "Array Range", TokenType::SYMBOL, "[");
     ++i;
-    std::optional<size_t> start;
-    std::optional<size_t> end;
-    if (i < tokens.size() && tokens[i].getType() == TokenType::INT_LIT) {
-        start = std::stoi(tokens[i].getValue());
+    std::optional<std::variant<size_t, std::shared_ptr<ExpressionNode>>> start;
+    std::optional<std::variant<size_t, std::shared_ptr<ExpressionNode>>> end;
+    if (i + 1 >= tokens.size())
+        throw UnexpectedEOFError("Array Range", "Lower bound or :");
+    if (tokens[i].getType() == TokenType::INT_LIT) {
+        size_t startAsSizeT = std::stoi(tokens[i].getValue());
         ++i;
         if (i < tokens.size() && tokens[i] == Token(TokenType::SYMBOL, "]")) {
             ++i;
-            return ArrayRangeNode(start, start.value() + 1);
+            return ArrayRangeNode(startAsSizeT, startAsSizeT + 1);
         }
+        start = startAsSizeT;
+    } else if (!(tokens[i] == Token(TokenType::SYMBOL, ":"))) {
+        ExpressionNode startAsExpression = ExpressionNode::parse(tokens, i);
+        if (i < tokens.size() && tokens[i] == Token(TokenType::SYMBOL, "]")) {
+            ++i;
+            ExpressionNode endAsExpression = ExpressionNode(
+                std::make_shared<ArithmeticNode>(
+                    std::make_shared<ExpressionNode>(startAsExpression),
+                    std::make_shared<ExpressionNode>((std::vector<int>){1}),
+                    ArithmeticNode::TYPE_ADDITION),
+                ArrayPostFixNode(
+                    std::vector<std::variant<std::shared_ptr<ArrayRangeNode>,
+                                             std::shared_ptr<MethodNode>>>()));
+        }
+        start = std::make_shared<ExpressionNode>(startAsExpression);
     }
     expect(tokens, i, "Array Range", TokenType::SYMBOL, ":");
     ++i;
-    if (i < tokens.size() && tokens[i].getType() == TokenType::INT_LIT) {
-        end = std::stoi(tokens[i].getValue());
+    if (i + 1 >= tokens.size())
+        throw UnexpectedEOFError("Array Range", "Lower bound or :");
+    if (tokens[i].getType() == TokenType::INT_LIT) {
+        end = static_cast<size_t>(std::stoi(tokens[i].getValue()));
         ++i;
+    } else if (!(tokens[i] == Token(TokenType::SYMBOL, "]"))) {
+        end =
+            std::make_shared<ExpressionNode>(ExpressionNode::parse(tokens, i));
     }
     expect(tokens, i, "Array Range", TokenType::SYMBOL, "]");
     ++i;
+
     return ArrayRangeNode(start, end);
 }
 
-ArrayRangeNode::ArrayRangeNode(std::optional<size_t> start,
-                               std::optional<size_t> end)
+ArrayRangeNode::ArrayRangeNode(
+    std::optional<std::variant<size_t, std::shared_ptr<ExpressionNode>>> start,
+    std::optional<std::variant<size_t, std::shared_ptr<ExpressionNode>>> end)
     : start(std::move(start)), end(std::move(end)) {}
 
 std::string FunctionDefinitionNode::toStringIndented(size_t indent) const {
@@ -1040,9 +1064,37 @@ ArrayPostFixNode::operator std::string() const {
 
 ArrayRangeNode::operator std::string() const {
     std::string result(1, '[');
-    if (start.has_value()) result += start.value();
+    if (start.has_value()) {
+        result += std::visit(
+            [](auto&& start) -> std::string {
+                using T = std::decay_t<decltype(start)>;
+                constexpr bool isSizeT = std::is_same_v<T, size_t>;
+                constexpr bool isExpression =
+                    std::is_same_v<T, std::shared_ptr<ExpressionNode>>;
+                if constexpr (isSizeT) {
+                    return std::to_string(start);
+                } else if constexpr (isExpression) {
+                    return std::string(*start);
+                }
+            },
+            start.value());
+    }
     result.push_back(':');
-    if (end.has_value()) result += end.value();
+    if (end.has_value()) {
+        result += std::visit(
+            [](auto&& end) -> std::string {
+                using T = std::decay_t<decltype(end)>;
+                constexpr bool isSizeT = std::is_same_v<T, size_t>;
+                constexpr bool isExpression =
+                    std::is_same_v<T, std::shared_ptr<ExpressionNode>>;
+                if constexpr (isSizeT) {
+                    return std::to_string(end);
+                } else if constexpr (isExpression) {
+                    return std::string(*end);
+                }
+            },
+            end.value());
+    }
     result.push_back(']');
     return result;
 }
@@ -1159,9 +1211,15 @@ const std::vector<std::shared_ptr<ExpressionNode>>& MethodNode::getParameters()
     return parameters;
 }
 
-const std::optional<size_t>& ArrayRangeNode::getStart() const { return start; }
+const std::optional<std::variant<size_t, std::shared_ptr<ExpressionNode>>>&
+ArrayRangeNode::getStart() const {
+    return start;
+}
 
-const std::optional<size_t>& ArrayRangeNode::getEnd() const { return end; }
+const std::optional<std::variant<size_t, std::shared_ptr<ExpressionNode>>>&
+ArrayRangeNode::getEnd() const {
+    return end;
+}
 
 const std::string& VariableAssignmentNode::getLeft() const { return left; }
 

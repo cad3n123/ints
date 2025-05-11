@@ -193,6 +193,55 @@ static Value applyMethod(const Value& value,
         throw std::runtime_error("Unknown method " + method->getIdentifier());
 }
 
+static size_t interpretArrayRangeBound(
+    const std::variant<size_t, std::shared_ptr<ExpressionNode>>& value,
+    std::weak_ptr<Scope> scope) {
+    return std::visit(
+        [&scope](auto&& value) -> size_t {
+            using T = std::decay_t<decltype(value)>;
+            constexpr bool isSizeT = std::is_same_v<T, size_t>;
+            constexpr bool isExpression =
+                std::is_same_v<T, std::shared_ptr<ExpressionNode>>;
+            if constexpr (isSizeT) {
+                return value;
+            } else if constexpr (isExpression) {
+                auto result =
+                    DynamicArray::fromValue(interpretExpression(value, scope));
+                if (result.size != 1 || result[0] < 0)
+                    throw std::runtime_error(
+                        "Array Bounds value must be an integer or evaluate to "
+                        "an array with 1 positive value");
+                return result[0];
+            }
+        },
+        value);
+}
+
+static Value interpretArrayRange(const std::shared_ptr<ArrayRangeNode>& range,
+                                 const Value& value,
+                                 std::weak_ptr<Scope> scope) {
+    size_t size = value.getSize();
+    auto startV = range->getStart().value_or(static_cast<size_t>(0));
+    auto endV = range->getEnd().value_or(size);
+    size_t start = interpretArrayRangeBound(startV, scope);
+    size_t end = interpretArrayRangeBound(endV, scope);
+    if (end < start)
+        throw std::runtime_error(
+            "Array Range upper bound must be greater than or equal to the "
+            "lower bound");
+    size_t newSize = end - start;
+    DynamicArray result(newSize);
+    if (end > size)
+        throw std::runtime_error(
+            "Array range bounds must be smaller than the "
+            "length of the array");
+    auto staticValue = DynamicArray::fromValue(value);
+    for (size_t i = 0; i < newSize; i++) {
+        result[i] = staticValue[i + start];
+    }
+    return Value(result, newSize);
+}
+
 static Value applyPostfix(const Value& value,
                           const ArrayPostFixNode& postfixNode,
                           std::weak_ptr<Scope> scope) {
@@ -206,38 +255,7 @@ static Value applyPostfix(const Value& value,
                 constexpr bool isMethod =
                     std::is_same_v<T, std::shared_ptr<MethodNode>>;
                 if constexpr (isArrayRange) {
-                    size_t size = resultValue->getSize();
-                    size_t end = arg->getEnd().value_or(size);
-                    size_t start = arg->getStart().value_or(0);
-                    if (end <= start)
-                        throw std::runtime_error(
-                            "Array Range upper bound must be greater than the "
-                            "lower bound");
-                    size_t newSize = end - start;
-                    DynamicArray result(newSize);
-                    if (end > size)
-                        throw std::runtime_error(
-                            "Array range bounds must be smaller than the "
-                            "length of the array");
-                    std::visit(
-                        [&result, &newSize, &start](auto&& valueValue) {
-                            using T = std::decay_t<decltype(valueValue)>;
-                            constexpr bool isVector =
-                                std::is_same_v<T, std::vector<int>>;
-                            constexpr bool isArray =
-                                std::is_same_v<T, DynamicArray>;
-                            if constexpr (isVector) {
-                                for (size_t i = 0; i < newSize; i++) {
-                                    result[i] = valueValue[i + start];
-                                }
-                            } else if constexpr (isArray) {
-                                for (size_t i = 0; i < newSize; i++) {
-                                    result[i] = valueValue[i + start];
-                                }
-                            }
-                        },
-                        resultValue->value);
-                    return Value(result, newSize);
+                    return interpretArrayRange(arg, *resultValue, scope);
                 } else if constexpr (isMethod) {
                     return applyMethod(*resultValue, arg, scope);
                 }
@@ -582,8 +600,7 @@ void interpret(const RootNode& root, int argc, std::vector<std::string> args) {
 
         std::vector<std::shared_ptr<ExpressionNode>> mainArgs = {
             std::make_shared<ExpressionNode>(std::vector<int>{argc}),
-            std::make_shared<ExpressionNode>(commandLineArgs)
-            };
+            std::make_shared<ExpressionNode>(commandLineArgs)};
 
         try {
             interpretFunctionCall(std::make_shared<FunctionCallNode>(

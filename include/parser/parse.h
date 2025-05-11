@@ -10,20 +10,26 @@
 
 #include "lexer/tokenize.h"
 
+class ExpressionNode;
+
 class ArrayRangeNode {
  public:
     static ArrayRangeNode parse(std::vector<Token> &tokens, size_t &i);
     operator std::string() const;
-    const std::optional<size_t> &getStart() const;
-    const std::optional<size_t> &getEnd() const;
+    const std::optional<std::variant<size_t, std::shared_ptr<ExpressionNode>>> &
+    getStart() const;
+    const std::optional<std::variant<size_t, std::shared_ptr<ExpressionNode>>> &
+    getEnd() const;
 
  private:
-    ArrayRangeNode(std::optional<size_t> start, std::optional<size_t> end);
-    std::optional<size_t> start;
-    std::optional<size_t> end;
+    ArrayRangeNode(
+        std::optional<std::variant<size_t, std::shared_ptr<ExpressionNode>>>
+            start,
+        std::optional<std::variant<size_t, std::shared_ptr<ExpressionNode>>>
+            end);
+    std::optional<std::variant<size_t, std::shared_ptr<ExpressionNode>>> start;
+    std::optional<std::variant<size_t, std::shared_ptr<ExpressionNode>>> end;
 };
-
-class ExpressionNode;
 
 class ArithmeticNode {
  public:
