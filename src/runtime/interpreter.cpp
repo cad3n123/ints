@@ -540,6 +540,20 @@ static Value interpretPrint(
     return Value(DynamicArray(0), 0);
 }
 
+static Value interpretRead(
+    const std::shared_ptr<FunctionCallNode>& functionCall,
+    std::weak_ptr<Scope> scope) {
+    if (functionCall->getParameters().size() != 1)
+        throw std::runtime_error(
+            "Function read expected 1 argument but received " +
+            functionCall->getParameters().size());
+    auto param1 = interpretExpression(functionCall->getParameters()[0], scope);
+    auto filename = valueToString(param1);
+    return interpretArray(std::make_shared<ArrayNode>(
+                              ArrayNode::stringToInts(readCode(filename))),
+                          scope);
+}
+
 static Value interpretFunctionCall(
     const std::shared_ptr<FunctionCallNode>& functionCall,
     std::weak_ptr<Scope> parent) {
@@ -577,6 +591,8 @@ static Value interpretFunctionCall(
             }
         } else if (functionCall->getIdentifier() == "print") {
             return interpretPrint(functionCall, parent);
+        } else if (functionCall->getIdentifier() == "read") {
+            return interpretRead(functionCall, parent);
         } else {
             throw std::runtime_error("Undefined function '" +
                                      functionCall->getIdentifier() + "'");
