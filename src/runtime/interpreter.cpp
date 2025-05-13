@@ -8,6 +8,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include<algorithm>
 
 #include "lexer/tokenize.h"
 #include "parser/parse.h"
@@ -603,22 +604,30 @@ static Value interpretFunctionCall(
 }
 
 static void interpretFile(const std::string& filename,
-                          std::shared_ptr<Scope> scope);
+                          std::shared_ptr<Scope> scope,
+                          std::vector<std::string>& interpretedFiles);
 
 static void interpretUse(const std::shared_ptr<UseNode>& use,
-                         std::shared_ptr<Scope> scope) {
-    auto filename = valueToString(interpretArray(use->getValue(), scope));
-    interpretFile(filename, scope);
+                         std::shared_ptr<Scope> scope,
+                         std::vector<std::string>& interpretedFiles) {
+    std::string filename =
+        valueToString(interpretArray(use->getValue(), scope));
+    if (std::find(interpretedFiles.begin(), interpretedFiles.end(), filename) ==
+        interpretedFiles.end()) {
+        interpretedFiles.push_back(filename);
+        interpretFile(filename, scope, interpretedFiles);
+    }
 }
 
 static void interpretFile(const std::string& filename,
-                          std::shared_ptr<Scope> scope) {
+                          std::shared_ptr<Scope> scope,
+                          std::vector<std::string>& interpretedFiles) {
     const std::string code = readCode(filename);
     auto tokens = tokenize(code);
     auto root = RootNode::parse(tokens);
     for (auto value : root.getValues()) {
         std::visit(
-            [&scope](auto&& arg) {
+            [&scope, &interpretedFiles](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
                 constexpr bool isFunctionDef =
                     std::is_same_v<T, std::shared_ptr<FunctionDefinitionNode>>;
@@ -627,7 +636,7 @@ static void interpretFile(const std::string& filename,
                 if constexpr (isFunctionDef) {
                     interpretFunctionDefinition(arg, scope);
                 } else if constexpr (isUse) {
-                    interpretUse(arg, scope);
+                    interpretUse(arg, scope, interpretedFiles);
                 }
             },
             value);
@@ -637,7 +646,8 @@ static void interpretFile(const std::string& filename,
 void interpret(const std::string& filename, int argc,
                std::vector<std::string> args) {
     auto scope = std::make_shared<Scope>();
-    interpretFile(filename, scope);
+    std::vector<std::string> interpretedFiles;
+    interpretFile(filename, scope, interpretedFiles);
     if (scope->has("main")) {
         std::vector<int> commandLineArgs;
         for (std::string arg : args) {
