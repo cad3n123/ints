@@ -293,6 +293,26 @@ class IfNode {
     std::optional<std::shared_ptr<BodyNode>> elseBody;
 };
 
+class WhileNode {
+ public:
+    WhileNode(std::variant<std::shared_ptr<IfCompareNode>,
+                        std::shared_ptr<IfDeclarationNode>>
+               condition,
+           std::shared_ptr<BodyNode> body);
+    static WhileNode parse(std::vector<Token> &tokens, size_t &i);
+    std::string toStringIndented(size_t indent) const;
+    const std::variant<std::shared_ptr<IfCompareNode>,
+                       std::shared_ptr<IfDeclarationNode>> &
+    getCondition() const;
+    const std::shared_ptr<BodyNode> &getBody() const;
+
+ private:
+    std::variant<std::shared_ptr<IfCompareNode>,
+                 std::shared_ptr<IfDeclarationNode>>
+        condition;
+    std::shared_ptr<BodyNode> body;
+};
+
 class ForLoopNode {
  public:
     static ForLoopNode parse(std::vector<Token> &tokens, size_t &i);
@@ -313,7 +333,7 @@ class StatementNode {
  public:
     explicit StatementNode(
         std::variant<std::shared_ptr<VariableBindingNode>,
-                     std::shared_ptr<ForLoopNode>, std::shared_ptr<IfNode>,
+                     std::shared_ptr<ForLoopNode>, std::shared_ptr<IfNode>, std::shared_ptr<WhileNode>,
                      std::shared_ptr<FunctionCallNode>,
                      std::shared_ptr<ReturnNode>>
             value);
@@ -321,14 +341,14 @@ class StatementNode {
                                                 size_t &i);
     std::string toStringIndented(size_t indent) const;
     const std::variant<std::shared_ptr<VariableBindingNode>,
-                       std::shared_ptr<ForLoopNode>, std::shared_ptr<IfNode>,
+                       std::shared_ptr<ForLoopNode>, std::shared_ptr<IfNode>, std::shared_ptr<WhileNode>,
                        std::shared_ptr<FunctionCallNode>,
                        std::shared_ptr<ReturnNode>> &
     getValue() const;
 
  private:
     std::variant<std::shared_ptr<VariableBindingNode>,
-                 std::shared_ptr<ForLoopNode>, std::shared_ptr<IfNode>,
+                 std::shared_ptr<ForLoopNode>, std::shared_ptr<IfNode>, std::shared_ptr<WhileNode>,
                  std::shared_ptr<FunctionCallNode>, std::shared_ptr<ReturnNode>>
         value;
 };

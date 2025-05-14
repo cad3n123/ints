@@ -68,7 +68,7 @@ static std::string interpretEscapes(const std::string& raw) {
 }
 
 std::vector<Token> tokenize(const std::string& code) {
-    const std::string symbols = "[]-><{}:+=*/%;().,";
+    const std::string symbols = "[]-><{}:+!=*/%;().,";
     std::vector<Token> result;
     size_t char_num = 1;
     size_t line_num = 1;

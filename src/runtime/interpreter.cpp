@@ -2,13 +2,21 @@
 
 #include "runtime/interpreter.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
-#include<algorithm>
+#ifdef _WIN32
+#include <conio.h>
+#else
+#include <termios.h>
+#include <unistd.h>
+#endif
+#include <csignal>
+#include <cstdlib>
 
 #include "lexer/tokenize.h"
 #include "parser/parse.h"
@@ -346,47 +354,6 @@ static void interpretVariableBinding(
         variableBinding->getValue());
 }
 
-static std::optional<Value> interpretForLoop(
-    const std::shared_ptr<ForLoopNode>& forLoop,
-    std::weak_ptr<Scope> parentScope) {
-    auto iterable = interpretExpression(forLoop->getIterable(), parentScope);
-    size_t iterableSize = iterable.getSize();
-    return std::visit(
-        [&parentScope, &forLoop,
-         &iterableSize](auto&& iterable) -> std::optional<Value> {
-            using T = std::decay_t<decltype(iterable)>;
-            constexpr bool isVector = std::is_same_v<T, std::vector<int>>;
-            constexpr bool isDynamicArray = std::is_same_v<T, DynamicArray>;
-            if constexpr (isVector) {
-                for (int element : iterable) {
-                    auto scope = std::make_shared<Scope>(parentScope);
-                    DynamicArray elementArray(1);
-                    elementArray[0] = element;
-                    scope->define(forLoop->getElement(),
-                                  Value(elementArray, 1));
-                    std::optional<Value> returnValue =
-                        interpretBody(forLoop->getBody(), scope);
-                    if (returnValue.has_value()) return returnValue.value();
-                }
-                return std::nullopt;
-            } else if constexpr (isDynamicArray) {
-                for (size_t i = 0; i < iterableSize; i++) {
-                    int element = iterable[i];
-                    auto scope = std::make_shared<Scope>(parentScope);
-                    DynamicArray elementArray(1);
-                    elementArray[0] = element;
-                    scope->define(forLoop->getElement(),
-                                  Value(elementArray, 1));
-                    std::optional<Value> returnValue =
-                        interpretBody(forLoop->getBody(), scope);
-                    if (returnValue.has_value()) return returnValue.value();
-                }
-                return std::nullopt;
-            }
-        },
-        iterable.value);
-}
-
 static bool interpretIfDeclaration(
     const std::shared_ptr<IfDeclarationNode>& condition,
     std::weak_ptr<Scope> scope) {
@@ -454,6 +421,58 @@ static bool interpretIfCondition(
         variantCondition);
 }
 
+static std::optional<Value> interpretWhile(
+    const std::shared_ptr<WhileNode>& whileNode,
+    std::weak_ptr<Scope> parentScope) {
+    auto scope = std::make_shared<Scope>(parentScope);
+    while (interpretIfCondition(whileNode->getCondition(), scope)) {
+        auto result = interpretBody(whileNode->getBody(), scope);
+        if (result.has_value()) return result.value();
+    }
+    return std::nullopt;
+}
+
+static std::optional<Value> interpretForLoop(
+    const std::shared_ptr<ForLoopNode>& forLoop,
+    std::weak_ptr<Scope> parentScope) {
+    auto iterable = interpretExpression(forLoop->getIterable(), parentScope);
+    size_t iterableSize = iterable.getSize();
+    return std::visit(
+        [&parentScope, &forLoop,
+         &iterableSize](auto&& iterable) -> std::optional<Value> {
+            using T = std::decay_t<decltype(iterable)>;
+            constexpr bool isVector = std::is_same_v<T, std::vector<int>>;
+            constexpr bool isDynamicArray = std::is_same_v<T, DynamicArray>;
+            if constexpr (isVector) {
+                for (int element : iterable) {
+                    auto scope = std::make_shared<Scope>(parentScope);
+                    DynamicArray elementArray(1);
+                    elementArray[0] = element;
+                    scope->define(forLoop->getElement(),
+                                  Value(elementArray, 1));
+                    std::optional<Value> returnValue =
+                        interpretBody(forLoop->getBody(), scope);
+                    if (returnValue.has_value()) return returnValue.value();
+                }
+                return std::nullopt;
+            } else if constexpr (isDynamicArray) {
+                for (size_t i = 0; i < iterableSize; i++) {
+                    int element = iterable[i];
+                    auto scope = std::make_shared<Scope>(parentScope);
+                    DynamicArray elementArray(1);
+                    elementArray[0] = element;
+                    scope->define(forLoop->getElement(),
+                                  Value(elementArray, 1));
+                    std::optional<Value> returnValue =
+                        interpretBody(forLoop->getBody(), scope);
+                    if (returnValue.has_value()) return returnValue.value();
+                }
+                return std::nullopt;
+            }
+        },
+        iterable.value);
+}
+
 static std::pair<std::optional<Value>, bool> interpretIf(
     const std::shared_ptr<IfNode>& ifNode, std::weak_ptr<Scope> parentScope) {
     auto scope = std::make_shared<Scope>(parentScope);
@@ -487,6 +506,8 @@ static std::optional<Value> interpretStatement(
                 std::is_same_v<T, std::shared_ptr<VariableBindingNode>>;
             constexpr bool isForLoop =
                 std::is_same_v<T, std::shared_ptr<ForLoopNode>>;
+            constexpr bool isWhile =
+                std::is_same_v<T, std::shared_ptr<WhileNode>>;
             constexpr bool isIfNode =
                 std::is_same_v<T, std::shared_ptr<IfNode>>;
             constexpr bool isFunctionCall =
@@ -498,6 +519,8 @@ static std::optional<Value> interpretStatement(
                 return std::nullopt;
             } else if constexpr (isForLoop) {
                 return interpretForLoop(arg, scope);
+            } else if constexpr (isWhile) {
+                return interpretWhile(arg, scope);
             } else if constexpr (isIfNode) {
                 return interpretIf(arg, scope).first;
             } else if constexpr (isFunctionCall) {
@@ -555,6 +578,55 @@ static Value interpretRead(
                           scope);
 }
 
+static char getCharImmediate() {
+#ifdef _WIN32
+    char ch = _getch();
+#else
+    struct termios oldt, newt;
+    char ch;
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);  // raw mode
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+    ch = getchar();
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+#endif
+    if (ch == 3)  // Ctrl+C
+        std::raise(SIGINT);
+    return ch;
+}
+
+static Value interpretGetchar(
+    const std::shared_ptr<FunctionCallNode>& functionCall,
+    std::weak_ptr<Scope> scope) {
+    if (functionCall->getParameters().size() != 0)
+        throw std::runtime_error(
+            "Function getchar expected 0 argument but received " +
+            functionCall->getParameters().size());
+    return interpretArray(std::make_shared<ArrayNode>(ArrayNode::stringToInts(
+                              std::string(1, getCharImmediate()))),
+                          scope);
+}
+
+static void clearTerminal() {
+#ifdef _WIN32
+    std::system("cls");  // Windows
+#else
+    std::system("clear");  // Unix/Linux/macOS
+#endif
+}
+
+static Value interpretClear(
+    const std::shared_ptr<FunctionCallNode>& functionCall) {
+    if (functionCall->getParameters().size() != 0)
+        throw std::runtime_error(
+            "Function clear expected 0 argument but received " +
+            functionCall->getParameters().size());
+    clearTerminal();
+    return Value(DynamicArray(0), 0);
+}
+
 static Value interpretFunctionCall(
     const std::shared_ptr<FunctionCallNode>& functionCall,
     std::weak_ptr<Scope> parent) {
@@ -594,6 +666,10 @@ static Value interpretFunctionCall(
             return interpretPrint(functionCall, parent);
         } else if (functionCall->getIdentifier() == "read") {
             return interpretRead(functionCall, parent);
+        } else if (functionCall->getIdentifier() == "getchar") {
+            return interpretGetchar(functionCall, parent);
+        } else if (functionCall->getIdentifier() == "clear") {
+            return interpretClear(functionCall);
         } else {
             throw std::runtime_error("Undefined function '" +
                                      functionCall->getIdentifier() + "'");

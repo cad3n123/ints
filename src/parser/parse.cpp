@@ -212,7 +212,8 @@ BodyNode::BodyNode(std::vector<std::shared_ptr<StatementNode>> statements)
 StatementNode::StatementNode(
     std::variant<std::shared_ptr<VariableBindingNode>,
                  std::shared_ptr<ForLoopNode>, std::shared_ptr<IfNode>,
-                 std::shared_ptr<FunctionCallNode>, std::shared_ptr<ReturnNode>>
+                 std::shared_ptr<WhileNode>, std::shared_ptr<FunctionCallNode>,
+                 std::shared_ptr<ReturnNode>>
         value)
     : value(std::move(value)) {}
 
@@ -229,6 +230,9 @@ std::shared_ptr<StatementNode> StatementNode::parse(std::vector<Token>& tokens,
         } else if (identifier == "for") {
             result = std::make_shared<StatementNode>(
                 std::make_shared<ForLoopNode>(ForLoopNode::parse(tokens, i)));
+        } else if (identifier == "while") {
+            result = std::make_shared<StatementNode>(
+                std::make_shared<WhileNode>(WhileNode::parse(tokens, i)));
         } else if (identifier == "return") {
             result = std::make_shared<StatementNode>(
                 std::make_shared<ReturnNode>(ReturnNode::parse(tokens, i)));
@@ -814,6 +818,9 @@ std::string StatementNode::toStringIndented(size_t indent) const {
             using T = std::decay_t<decltype(arg)>;
             constexpr bool isForLoop =
                 std::is_same_v<T, std::shared_ptr<ForLoopNode>>;
+            constexpr bool isWhile =
+                std::is_same_v<T, std::shared_ptr<WhileNode>>;
+            constexpr bool isIf = std::is_same_v<T, std::shared_ptr<IfNode>>;
             constexpr bool isFunctionCall =
                 std::is_same_v<T, std::shared_ptr<FunctionCallNode>>;
             constexpr bool isReturn =
@@ -823,7 +830,9 @@ std::string StatementNode::toStringIndented(size_t indent) const {
                 result += std::string(*arg) + ";";
             } else if constexpr (isForLoop) {
                 result += arg->toStringIndented(indent);
-            } else if constexpr (std::is_same_v<T, std::shared_ptr<IfNode>>) {
+            } else if constexpr (isWhile) {
+                result += arg->toStringIndented(indent);
+            } else if constexpr (isIf) {
                 result += arg->toStringIndented(indent);
             } else if constexpr (isFunctionCall) {
                 result += std::string(*arg) + ";";
@@ -1141,10 +1150,10 @@ const std::vector<std::shared_ptr<StatementNode>>& BodyNode::getStatements()
     return statements;
 }
 
-const std::variant<std::shared_ptr<VariableBindingNode>,
-                   std::shared_ptr<ForLoopNode>, std::shared_ptr<IfNode>,
-                   std::shared_ptr<FunctionCallNode>,
-                   std::shared_ptr<ReturnNode>>&
+const std::variant<
+    std::shared_ptr<VariableBindingNode>, std::shared_ptr<ForLoopNode>,
+    std::shared_ptr<IfNode>, std::shared_ptr<WhileNode>,
+    std::shared_ptr<FunctionCallNode>, std::shared_ptr<ReturnNode>>&
 StatementNode::getValue() const {
     return value;
 }
@@ -1306,3 +1315,61 @@ UseNode::UseNode(std::shared_ptr<ArrayNode> value) : value(std::move(value)) {}
 std::string UseNode::toStringIndented(size_t indent) const {
     return nTabs(indent) + " " + std::string(*value);
 }
+
+WhileNode::WhileNode(std::variant<std::shared_ptr<IfCompareNode>,
+                                  std::shared_ptr<IfDeclarationNode>>
+                         condition,
+                     std::shared_ptr<BodyNode> body)
+    : condition(std::move(condition)), body(std::move(body)) {}
+
+WhileNode WhileNode::parse(std::vector<Token>& tokens, size_t& i) {
+    expect(tokens, i, "while", TokenType::IDENTIFIER, "while");
+    ++i;
+    if (i >= tokens.size()) throw UnexpectedEOFError("while", "token");
+
+    std::variant<std::shared_ptr<IfCompareNode>,
+                 std::shared_ptr<IfDeclarationNode>>
+        condition =
+            (tokens[i].getType() == TokenType::IDENTIFIER &&
+             tokens[i].getValue() == "let")
+                ? std::variant<
+                      std::shared_ptr<IfCompareNode>,
+                      std::shared_ptr<IfDeclarationNode>>{std::make_shared<
+                      IfDeclarationNode>(IfDeclarationNode::parse(tokens, i))}
+                : std::variant<std::shared_ptr<IfCompareNode>,
+                               std::shared_ptr<IfDeclarationNode>>{
+                      std::make_shared<IfCompareNode>(
+                          IfCompareNode::parse(tokens, i))};
+
+    std::shared_ptr<BodyNode> body = BodyNode::parse(tokens, i);
+
+    return WhileNode(condition, body);
+}
+
+std::string WhileNode::toStringIndented(size_t indent) const {
+    std::string result = "while ";
+    std::visit(
+        [&result](auto&& arg) {
+            using T = std::decay_t<decltype(arg)>;
+            constexpr bool isCompare =
+                std::is_same_v<T, std::shared_ptr<IfCompareNode>>;
+            constexpr bool isDeclaration =
+                std::is_same_v<T, std::shared_ptr<IfDeclarationNode>>;
+            if constexpr (isCompare) {
+                result += std::string(*arg);
+            } else if constexpr (isDeclaration) {
+                result += std::string(*arg);
+            }
+        },
+        condition);
+    result += " " + body->toStringIndented(indent);
+    return result;
+}
+
+const std::variant<std::shared_ptr<IfCompareNode>,
+                   std::shared_ptr<IfDeclarationNode>>&
+WhileNode::getCondition() const {
+    return condition;
+}
+
+const std::shared_ptr<BodyNode>& WhileNode::getBody() const { return body; }
