@@ -67,6 +67,11 @@ static std::string interpretEscapes(const std::string& raw) {
     return result;
 }
 
+int isidentchar(int c) {
+    return static_cast<int>(static_cast<bool>(std::isalnum(c)) || c == '_' ||
+                            c == '-');
+}
+
 std::vector<Token> tokenize(const std::string& code) {
     const std::string symbols = "[]-><{}:+!=*/%;().,";
     std::vector<Token> result;
@@ -76,8 +81,8 @@ std::vector<Token> tokenize(const std::string& code) {
     const size_t code_length = code.length();
     for (size_t i = 0; i < code_length; i++) {
         const char c = code[i];
-        if (std::isalpha(c)) {
-            auto identifier = collectWhile(code, i, char_num, std::isalnum);
+        if (std::isalpha(c) || c == '_') {
+            auto identifier = collectWhile(code, i, char_num, isidentchar);
             result.emplace_back(TokenType::IDENTIFIER, identifier);
         } else if (std::isdigit(c) || (c == '-' && i + 1 < code_length &&
                                        std::isdigit(code[i + 1]))) {

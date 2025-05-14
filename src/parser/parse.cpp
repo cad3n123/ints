@@ -434,9 +434,11 @@ IfCompareNode IfCompareNode::parse(std::vector<Token>& tokens, size_t& i) {
                 type = Type::NE;
                 break;
             default:
-                throw UnexpectedTokenError("If Comparison",
-                                           std::string(1, symbol1),
-                                           "Comparison Operator");
+                throw UnexpectedTokenError(
+                    "If Comparison",
+                    tokenTypeToString(tokens[i - 1].getType()) + " " +
+                        std::string(1, symbol1),
+                    "Comparison Operator");
                 break;
         }
     } else {
@@ -448,9 +450,11 @@ IfCompareNode IfCompareNode::parse(std::vector<Token>& tokens, size_t& i) {
                 type = Type::GT;
                 break;
             default:
-                throw UnexpectedTokenError("If Comparison",
-                                           std::string(1, symbol1),
-                                           "Comparison Operator");
+                throw UnexpectedTokenError(
+                    "If Comparison",
+                    tokenTypeToString(tokens[i].getType()) + " " +
+                        std::string(1, symbol1),
+                    "Comparison Operator");
                 break;
         }
     }

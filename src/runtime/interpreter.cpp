@@ -627,6 +627,43 @@ static Value interpretClear(
     return Value(DynamicArray(0), 0);
 }
 
+static Value interpretRange(
+    const std::shared_ptr<FunctionCallNode>& functionCall,
+    std::weak_ptr<Scope> scope) {
+    if (functionCall->getParameters().size() != 1)
+        throw std::runtime_error(
+            "Function range expected 1 argument but received " +
+            functionCall->getParameters().size());
+    auto param1 = DynamicArray::fromValue(
+        interpretExpression(functionCall->getParameters()[0], scope));
+    if (param1.size != 1)
+        throw std::runtime_error(
+            "Function range expected 1 argument with size [1] but received [" +
+            std::to_string(param1.size) + "]");
+    int length = param1[0];
+    if (length < 0)
+        throw std::runtime_error(
+            "Function range expected 1 non-negative argument with size [1] but "
+            "received the value " +
+            std::string(param1));
+    DynamicArray result(static_cast<size_t>(length));
+    for (size_t i = 0; i < result.size; i++) result[i] = i;
+
+    return Value(result, result.size);
+}
+
+static Value interpretExit(
+    const std::shared_ptr<FunctionCallNode>& functionCall,
+    std::weak_ptr<Scope> scope) {
+    if (functionCall->getParameters().size() != 1)
+        throw std::runtime_error(
+            "Function range expected 1 argument but received " +
+            functionCall->getParameters().size());
+    auto param1 = DynamicArray::fromValue(
+        interpretExpression(functionCall->getParameters()[0], scope));
+    exit(param1[0]);
+}
+
 static Value interpretFunctionCall(
     const std::shared_ptr<FunctionCallNode>& functionCall,
     std::weak_ptr<Scope> parent) {
@@ -670,6 +707,10 @@ static Value interpretFunctionCall(
             return interpretGetchar(functionCall, parent);
         } else if (functionCall->getIdentifier() == "clear") {
             return interpretClear(functionCall);
+        } else if (functionCall->getIdentifier() == "range") {
+            return interpretRange(functionCall, parent);
+        } else if (functionCall->getIdentifier() == "exit") {
+            return interpretExit(functionCall, parent);
         } else {
             throw std::runtime_error("Undefined function '" +
                                      functionCall->getIdentifier() + "'");
