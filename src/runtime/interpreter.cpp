@@ -38,8 +38,9 @@ bool Scope::hasRecursive(const std::string& name) const {
     return false;
 }
 
-const std::variant<Value, std::shared_ptr<FunctionDefinitionNode>>& Scope::get(
-    const std::string& name) const {
+const std::variant<std::shared_ptr<Value>,
+                   std::shared_ptr<FunctionDefinitionNode>>&
+Scope::get(const std::string& name) const {
     if (has(name)) return variables.at(name);
     if (auto parent_locked = parent.lock()) {
         return parent_locked->get(name);
@@ -49,7 +50,8 @@ const std::variant<Value, std::shared_ptr<FunctionDefinitionNode>>& Scope::get(
 
 void Scope::set(
     const std::string& name,
-    const std::variant<Value, std::shared_ptr<FunctionDefinitionNode>>& value) {
+    const std::variant<std::shared_ptr<Value>,
+                       std::shared_ptr<FunctionDefinitionNode>>& value) {
     if (has(name)) {
         variables.insert_or_assign(name, value);
     } else if (auto parent_locked = parent.lock()) {
@@ -61,7 +63,8 @@ void Scope::set(
 
 void Scope::define(
     const std::string& name,
-    const std::variant<Value, std::shared_ptr<FunctionDefinitionNode>>& value) {
+    const std::variant<std::shared_ptr<Value>,
+                       std::shared_ptr<FunctionDefinitionNode>>& value) {
     variables.emplace(name, value);
 }
 
@@ -103,7 +106,8 @@ static Value interpretArray(const std::shared_ptr<ArrayNode>& array,
                 if constexpr (isVector) {
                     return Value(arg, arg.size());
                 } else if constexpr (isString) {
-                    if (auto value = std::get_if<Value>(&lockedScope->get(arg)))
+                    if (auto value = *std::get_if<std::shared_ptr<Value>>(
+                            &lockedScope->get(arg)))
                         return *value;
                     else
                         throw std::runtime_error(
@@ -312,9 +316,9 @@ static void interpretVariableDeclaration(
         if (variableDeclaration->getValue().has_value())
             value = interpretExpression(variableDeclaration->getValue().value(),
                                         scope);
-        lockedScope->define(
-            variableDeclaration->getIdentifier(),
-            Value::fromDescriptor(variableDeclaration->getDescriptor(), value));
+        lockedScope->define(variableDeclaration->getIdentifier(),
+                            std::make_shared<Value>(Value::fromDescriptor(
+                                variableDeclaration->getDescriptor(), value)));
     } else {
         throw std::runtime_error("Error interpreting variable declaration");
     }
@@ -328,7 +332,8 @@ static void interpretVariableAssignment(
             throw std::runtime_error(variableAssignment->getLeft() +
                                      " has not been defined");
 
-        auto right = interpretExpression(variableAssignment->getRight(), scope);
+        auto right = std::make_shared<Value>(
+            interpretExpression(variableAssignment->getRight(), scope));
         lockedScope->set(variableAssignment->getLeft(), right);
     } else {
         throw std::runtime_error("Error interpreting variable assignment");
@@ -371,7 +376,8 @@ static bool interpretIfDeclaration(
              descriptor.getCanGrow())) {
             lockedScope->define(
                 condition->getVariableDeclaration()->getIdentifier(),
-                Value::fromDescriptor(descriptor, value));
+                std::make_shared<Value>(
+                    Value::fromDescriptor(descriptor, value)));
             return true;
         } else {
             return false;
@@ -449,7 +455,7 @@ static std::optional<Value> interpretForLoop(
                     DynamicArray elementArray(1);
                     elementArray[0] = element;
                     scope->define(forLoop->getElement(),
-                                  Value(elementArray, 1));
+                                  std::make_shared<Value>(elementArray, 1));
                     std::optional<Value> returnValue =
                         interpretBody(forLoop->getBody(), scope);
                     if (returnValue.has_value()) return returnValue.value();
@@ -462,7 +468,7 @@ static std::optional<Value> interpretForLoop(
                     DynamicArray elementArray(1);
                     elementArray[0] = element;
                     scope->define(forLoop->getElement(),
-                                  Value(elementArray, 1));
+                                  std::make_shared<Value>(elementArray, 1));
                     std::optional<Value> returnValue =
                         interpretBody(forLoop->getBody(), scope);
                     if (returnValue.has_value()) return returnValue.value();
@@ -686,8 +692,8 @@ static Value interpretFunctionCall(
                     auto& param = params[i];
                     auto& argument = arguments[i];
                     scope->define(param->getIdentifier(),
-                                  Value::fromDescriptor(param->getDescriptor(),
-                                                        *argument));
+                                  std::make_shared<Value>(Value::fromDescriptor(
+                                      param->getDescriptor(), *argument)));
                 }
                 std::optional<Value> returnValue =
                     interpretBody(functionDefinition->getBody(), scope);
