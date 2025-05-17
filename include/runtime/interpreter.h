@@ -38,5 +38,6 @@ class Scope {
         variables;
 };
 
+bool isGuiRunning();
 void interpret(const std::string& filename, int argc,
                std::vector<std::string> args);

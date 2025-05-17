@@ -2,11 +2,17 @@
 
 #include "runtime/interpreter.h"
 
+#include <GLFW/glfw3.h>
+
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <csignal>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 #ifdef _WIN32
@@ -15,12 +21,15 @@
 #include <termios.h>
 #include <unistd.h>
 #endif
-#include <csignal>
-#include <cstdlib>
 
+#include "imgui/backends/imgui_impl_glfw.h"
+#include "imgui/backends/imgui_impl_opengl3.h"
+#include "imgui/imgui.h"
 #include "lexer/tokenize.h"
 #include "parser/parse.h"
 #include "util/file.h"
+
+std::atomic<bool> guiRunning;
 
 Scope::Scope(std::weak_ptr<Scope> parent) : parent(parent) {}
 
@@ -726,40 +735,172 @@ static Value interpretFunctionCall(
     }
 }
 
+bool isGuiRunning() { return guiRunning.load(); }
+
+static void error_callback(int error, const char* description) {
+    std::cerr << "GLFW Error " << error << ": " << description << std::endl;
+}
+
+static void guiThreadFunction(std::shared_ptr<Scope> scope) {
+    glfwSetErrorCallback(error_callback);
+    if (!glfwInit()) return;
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+#if __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    auto window_size = DynamicArray::fromValue(
+        *std::get<std::shared_ptr<Value>>(scope->get("window_size")));
+    GLFWwindow* window = glfwCreateWindow(window_size[0], window_size[1],
+                                          "Dear ImGui Example", NULL, NULL);
+    if (!window) {
+        glfwTerminate();
+        return;
+    }
+
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    (void)io;
+
+    ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
+
+    guiRunning = true;
+
+    while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::Begin("Window");
+        ImGui::Text("Hello from the GUI thread!");
+        ImGui::End();
+
+        ImGui::Render();
+        int display_w, display_h;
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        glfwSwapBuffers(window);
+    }
+
+    // Cleanup
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    glfwDestroyWindow(window);
+    glfwTerminate();
+
+    guiRunning = false;
+}
+
+static void interpretGraphics(std::shared_ptr<Scope> scope) {
+    if (scope->hasRecursive("window_size")) {
+        auto window_size = scope->get("window_size");
+        std::visit(
+            [](auto&& arg) {
+                using T = std::decay_t<decltype(arg)>;
+                constexpr bool isValue =
+                    std::is_same_v<T, std::shared_ptr<Value>>;
+                constexpr bool isFunctionDef =
+                    std::is_same_v<T, std::shared_ptr<FunctionDefinitionNode>>;
+                if constexpr (isValue) {
+                    if (arg->getSize() != 2)
+                        throw std::runtime_error(
+                            "window_size must have 2 values, width and height");
+
+                } else if constexpr (isFunctionDef) {
+                    throw std::runtime_error(
+                        "window_size must be an array with 2 values");
+                }
+            },
+            window_size);
+    } else {
+        auto window_size = std::make_unique<int[]>(2);
+        window_size[0] = 800;
+        window_size[1] = 600;
+        scope->define("window_size",
+                      std::make_shared<Value>(
+                          DynamicArray(std::move(window_size), 2), 2));
+    }
+    std::thread guiThread([scope]() { guiThreadFunction(scope); });
+    guiThread.detach();
+    while (!isGuiRunning())
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+}
+
 static void interpretFile(const std::string& filename,
                           std::shared_ptr<Scope> scope,
+                          std::vector<std::string>& interpretedStandardHeaders,
                           std::vector<std::string>& interpretedFiles);
 
 static void interpretUse(const std::shared_ptr<UseNode>& use,
                          std::shared_ptr<Scope> scope,
+                         std::vector<std::string>& interpretedStandardHeaders,
                          std::vector<std::string>& interpretedFiles) {
-    std::string filename =
-        valueToString(interpretArray(use->getValue(), scope));
-    if (std::find(interpretedFiles.begin(), interpretedFiles.end(), filename) ==
-        interpretedFiles.end()) {
-        interpretedFiles.push_back(filename);
-        interpretFile(filename, scope, interpretedFiles);
+    if (use->getType() == UseNode::Type::STANDARD_HEADER) {
+        std::string headerName =
+            valueToString(interpretArray(use->getValue(), scope));
+        if (headerName == "graphics" &&
+            std::find(interpretedStandardHeaders.begin(),
+                      interpretedStandardHeaders.end(),
+                      headerName) == interpretedStandardHeaders.end()) {
+            interpretedStandardHeaders.push_back(headerName);
+            interpretGraphics(scope);
+        } else {
+            throw std::runtime_error("Unknown header file " + headerName);
+        }
+    } else {
+        std::string filename =
+            valueToString(interpretArray(use->getValue(), scope));
+        if (std::find(interpretedFiles.begin(), interpretedFiles.end(),
+                      filename) == interpretedFiles.end()) {
+            interpretedFiles.push_back(filename);
+            interpretFile(filename, scope, interpretedStandardHeaders,
+                          interpretedFiles);
+        }
     }
 }
 
 static void interpretFile(const std::string& filename,
                           std::shared_ptr<Scope> scope,
+                          std::vector<std::string>& interpretedStandardHeaders,
                           std::vector<std::string>& interpretedFiles) {
     const std::string code = readCode(filename);
     auto tokens = tokenize(code);
     auto root = RootNode::parse(tokens);
+
     for (auto value : root.getValues()) {
         std::visit(
-            [&scope, &interpretedFiles](auto&& arg) {
+            [&scope, &interpretedStandardHeaders,
+             &interpretedFiles](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
+                constexpr bool isVariableDeclaration =
+                    std::is_same_v<T, std::shared_ptr<VariableDeclarationNode>>;
                 constexpr bool isFunctionDef =
                     std::is_same_v<T, std::shared_ptr<FunctionDefinitionNode>>;
                 constexpr bool isUse =
                     std::is_same_v<T, std::shared_ptr<UseNode>>;
-                if constexpr (isFunctionDef) {
+                if constexpr (isVariableDeclaration) {
+                    interpretVariableDeclaration(arg, scope);
+                } else if constexpr (isFunctionDef) {
                     interpretFunctionDefinition(arg, scope);
                 } else if constexpr (isUse) {
-                    interpretUse(arg, scope, interpretedFiles);
+                    interpretUse(arg, scope, interpretedStandardHeaders,
+                                 interpretedFiles);
                 }
             },
             value);
@@ -768,9 +909,11 @@ static void interpretFile(const std::string& filename,
 
 void interpret(const std::string& filename, int argc,
                std::vector<std::string> args) {
+    guiRunning = false;
     auto scope = std::make_shared<Scope>();
-    std::vector<std::string> interpretedFiles;
-    interpretFile(filename, scope, interpretedFiles);
+    std::vector<std::string> interpretedStandardHeaders, interpretedFiles;
+    interpretFile(filename, scope, interpretedStandardHeaders,
+                  interpretedFiles);
     if (scope->has("main")) {
         std::vector<int> commandLineArgs;
         for (std::string arg : args) {

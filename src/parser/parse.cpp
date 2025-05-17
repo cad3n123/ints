@@ -57,7 +57,8 @@ static std::string nTabs(size_t n) {
 }
 
 RootNode RootNode::parse(std::vector<Token>& tokens) {
-    std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>,
+    std::vector<std::variant<std::shared_ptr<VariableDeclarationNode>,
+                             std::shared_ptr<FunctionDefinitionNode>,
                              std::shared_ptr<UseNode>>>
         values;
     size_t numTokens = tokens.size();
@@ -65,7 +66,13 @@ RootNode RootNode::parse(std::vector<Token>& tokens) {
     while (i < numTokens) {
         switch (tokens[i].getType()) {
             case TokenType::IDENTIFIER:
-                if (tokens[i].getValue() == "fn") {
+                if (tokens[i].getValue() == "let") {
+                    values.push_back(std::make_shared<VariableDeclarationNode>(
+                        VariableDeclarationNode::parse(tokens, i)));
+                    expect(tokens, i, "TODO", TokenType::SYMBOL, ";");
+                    ++i;
+                    break;
+                } else if (tokens[i].getValue() == "fn") {
                     values.push_back(std::make_shared<FunctionDefinitionNode>(
                         FunctionDefinitionNode::parse(tokens, i)));
                     break;
@@ -76,8 +83,9 @@ RootNode RootNode::parse(std::vector<Token>& tokens) {
                 }
                 [[fallthrough]];
             default:
-                throw std::runtime_error(tokens[i].getValue() +
-                                         ". Expected use or fn");
+                throw std::runtime_error("Unexpected value " +
+                                         tokens[i].getValue() +
+                                         ". Expected let, use, or fn");
         }
     }
     return RootNode(std::move(values));
@@ -89,11 +97,15 @@ RootNode::operator std::string() const {
         std::visit(
             [&result](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
+                constexpr bool isVariableDeclaration =
+                    std::is_same_v<T, std::shared_ptr<VariableDeclarationNode>>;
                 constexpr bool isFunctionDef =
                     std::is_same_v<T, std::shared_ptr<FunctionDefinitionNode>>;
                 constexpr bool isUse =
                     std::is_same_v<T, std::shared_ptr<UseNode>>;
-                if constexpr (isFunctionDef) {
+                if constexpr (isVariableDeclaration) {
+                    result += std::string(*arg) + "\n";
+                } else if constexpr (isFunctionDef) {
                     result += arg->toStringIndented(0) + "\n";
                 } else if constexpr (isUse) {
                     result += arg->toStringIndented(0) + "\n";
@@ -105,7 +117,8 @@ RootNode::operator std::string() const {
 }
 
 RootNode::RootNode(
-    std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>,
+    std::vector<std::variant<std::shared_ptr<VariableDeclarationNode>,
+                             std::shared_ptr<FunctionDefinitionNode>,
                              std::shared_ptr<UseNode>>>
         values)
     : values(std::move(values)) {}
@@ -1126,7 +1139,8 @@ ArrayRangeNode::operator std::string() const {
     return result;
 }
 
-const std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>,
+const std::vector<std::variant<std::shared_ptr<VariableDeclarationNode>,
+                               std::shared_ptr<FunctionDefinitionNode>,
                                std::shared_ptr<UseNode>>>&
 RootNode::getValues() const {
     return values;
@@ -1309,15 +1323,40 @@ ExpressionNode::ExpressionNode(std::vector<int> values)
 UseNode UseNode::parse(std::vector<Token>& tokens, size_t& i) {
     expect(tokens, i, "use", TokenType::IDENTIFIER, "use");
     ++i;
-    return UseNode(std::make_shared<ArrayNode>(ArrayNode::parse(tokens, i)));
+    if (i >= tokens.size())
+        throw UnexpectedEOFError("use",
+                                 "\"array literal\" or <standard_header>");
+    if (tokens[i] == Token(TokenType::SYMBOL, "<")) {
+        ++i;
+        auto standardHeader =
+            expect(tokens, i, "use", TokenType::IDENTIFIER).getValue();
+        ++i;
+        expect(tokens, i, "use", TokenType::SYMBOL, ">");
+        ++i;
+        return UseNode(std::make_shared<ArrayNode>(
+                           ArrayNode::stringToInts(standardHeader)),
+                       Type::STANDARD_HEADER);
+    }
+    return UseNode(std::make_shared<ArrayNode>(ArrayNode::parse(tokens, i)),
+                   Type::PATH);
 }
 
 const std::shared_ptr<ArrayNode>& UseNode::getValue() const { return value; }
 
-UseNode::UseNode(std::shared_ptr<ArrayNode> value) : value(std::move(value)) {}
+const UseNode::Type& UseNode::getType() const { return type; }
+
+UseNode::UseNode(std::shared_ptr<ArrayNode> value, Type type)
+    : value(std::move(value)), type(type) {}
 
 std::string UseNode::toStringIndented(size_t indent) const {
-    return nTabs(indent) + " " + std::string(*value);
+    char begin, end;
+    begin = end = '"';
+    if (type == Type::STANDARD_HEADER) {
+        begin = '<';
+        end = '>';
+    }
+    return nTabs(indent) + " " + std::string(1, begin) + std::string(*value) +
+           std::string(1, end);
 }
 
 WhileNode::WhileNode(std::variant<std::shared_ptr<IfCompareNode>,

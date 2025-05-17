@@ -296,9 +296,9 @@ class IfNode {
 class WhileNode {
  public:
     WhileNode(std::variant<std::shared_ptr<IfCompareNode>,
-                        std::shared_ptr<IfDeclarationNode>>
-               condition,
-           std::shared_ptr<BodyNode> body);
+                           std::shared_ptr<IfDeclarationNode>>
+                  condition,
+              std::shared_ptr<BodyNode> body);
     static WhileNode parse(std::vector<Token> &tokens, size_t &i);
     std::string toStringIndented(size_t indent) const;
     const std::variant<std::shared_ptr<IfCompareNode>,
@@ -332,24 +332,25 @@ class ForLoopNode {
 class StatementNode {
  public:
     explicit StatementNode(
-        std::variant<std::shared_ptr<VariableBindingNode>,
-                     std::shared_ptr<ForLoopNode>, std::shared_ptr<IfNode>, std::shared_ptr<WhileNode>,
-                     std::shared_ptr<FunctionCallNode>,
-                     std::shared_ptr<ReturnNode>>
+        std::variant<
+            std::shared_ptr<VariableBindingNode>, std::shared_ptr<ForLoopNode>,
+            std::shared_ptr<IfNode>, std::shared_ptr<WhileNode>,
+            std::shared_ptr<FunctionCallNode>, std::shared_ptr<ReturnNode>>
             value);
     static std::shared_ptr<StatementNode> parse(std::vector<Token> &tokens,
                                                 size_t &i);
     std::string toStringIndented(size_t indent) const;
-    const std::variant<std::shared_ptr<VariableBindingNode>,
-                       std::shared_ptr<ForLoopNode>, std::shared_ptr<IfNode>, std::shared_ptr<WhileNode>,
-                       std::shared_ptr<FunctionCallNode>,
-                       std::shared_ptr<ReturnNode>> &
+    const std::variant<
+        std::shared_ptr<VariableBindingNode>, std::shared_ptr<ForLoopNode>,
+        std::shared_ptr<IfNode>, std::shared_ptr<WhileNode>,
+        std::shared_ptr<FunctionCallNode>, std::shared_ptr<ReturnNode>> &
     getValue() const;
 
  private:
     std::variant<std::shared_ptr<VariableBindingNode>,
-                 std::shared_ptr<ForLoopNode>, std::shared_ptr<IfNode>, std::shared_ptr<WhileNode>,
-                 std::shared_ptr<FunctionCallNode>, std::shared_ptr<ReturnNode>>
+                 std::shared_ptr<ForLoopNode>, std::shared_ptr<IfNode>,
+                 std::shared_ptr<WhileNode>, std::shared_ptr<FunctionCallNode>,
+                 std::shared_ptr<ReturnNode>>
         value;
 };
 
@@ -389,29 +390,33 @@ class FunctionDefinitionNode {
 
 class UseNode {
  public:
+    enum Type { PATH, STANDARD_HEADER };
     static UseNode parse(std::vector<Token> &tokens, size_t &i);
     const std::shared_ptr<ArrayNode> &getValue() const;
+    const Type &getType() const;
     std::string toStringIndented(size_t indent) const;
 
  private:
-    explicit UseNode(std::shared_ptr<ArrayNode> value);
+    UseNode(std::shared_ptr<ArrayNode> value, Type type);
     std::shared_ptr<ArrayNode> value;
+    Type type;
 };
 
 class RootNode {
  public:
     static RootNode parse(std::vector<Token> &tokens);
     operator std::string() const;
-    const std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>,
+    const std::vector<std::variant<std::shared_ptr<VariableDeclarationNode>,
+                                   std::shared_ptr<FunctionDefinitionNode>,
                                    std::shared_ptr<UseNode>>> &
     getValues() const;
 
  private:
     explicit RootNode(
-        std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>,
+        std::vector<std::variant<std::shared_ptr<VariableDeclarationNode>,std::shared_ptr<FunctionDefinitionNode>,
                                  std::shared_ptr<UseNode>>>
             values);
-    std::vector<std::variant<std::shared_ptr<FunctionDefinitionNode>,
+    std::vector<std::variant<std::shared_ptr<VariableDeclarationNode>,std::shared_ptr<FunctionDefinitionNode>,
                              std::shared_ptr<UseNode>>>
         values;
 };

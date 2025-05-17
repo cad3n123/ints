@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -20,6 +21,9 @@ int main(int argc, char* argv[]) {
     }
 
     interpret(filename, argc - 2, args);
+
+    while (isGuiRunning())
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     return 0;
 }
