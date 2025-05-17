@@ -74,7 +74,7 @@ void Scope::define(
     const std::string& name,
     const std::variant<std::shared_ptr<Value>,
                        std::shared_ptr<FunctionDefinitionNode>>& value) {
-    variables.emplace(name, value);
+    variables[name] = value;
 }
 
 static void interpretFunctionDefinition(
@@ -808,34 +808,6 @@ static void guiThreadFunction(std::shared_ptr<Scope> scope) {
 }
 
 static void interpretGraphics(std::shared_ptr<Scope> scope) {
-    if (scope->hasRecursive("window_size")) {
-        auto window_size = scope->get("window_size");
-        std::visit(
-            [](auto&& arg) {
-                using T = std::decay_t<decltype(arg)>;
-                constexpr bool isValue =
-                    std::is_same_v<T, std::shared_ptr<Value>>;
-                constexpr bool isFunctionDef =
-                    std::is_same_v<T, std::shared_ptr<FunctionDefinitionNode>>;
-                if constexpr (isValue) {
-                    if (arg->getSize() != 2)
-                        throw std::runtime_error(
-                            "window_size must have 2 values, width and height");
-
-                } else if constexpr (isFunctionDef) {
-                    throw std::runtime_error(
-                        "window_size must be an array with 2 values");
-                }
-            },
-            window_size);
-    } else {
-        auto window_size = std::make_unique<int[]>(2);
-        window_size[0] = 800;
-        window_size[1] = 600;
-        scope->define("window_size",
-                      std::make_shared<Value>(
-                          DynamicArray(std::move(window_size), 2), 2));
-    }
     std::thread guiThread([scope]() { guiThreadFunction(scope); });
     guiThread.detach();
     while (!isGuiRunning())
@@ -859,7 +831,12 @@ static void interpretUse(const std::shared_ptr<UseNode>& use,
                       interpretedStandardHeaders.end(),
                       headerName) == interpretedStandardHeaders.end()) {
             interpretedStandardHeaders.push_back(headerName);
-            interpretGraphics(scope);
+            auto window_size = std::make_unique<int[]>(2);
+            window_size[0] = 800;
+            window_size[1] = 600;
+            scope->define("window_size",
+                          std::make_shared<Value>(
+                              DynamicArray(std::move(window_size), 2), 2));
         } else {
             throw std::runtime_error("Unknown header file " + headerName);
         }
@@ -888,14 +865,14 @@ static void interpretFile(const std::string& filename,
             [&scope, &interpretedStandardHeaders,
              &interpretedFiles](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
-                constexpr bool isVariableDeclaration =
-                    std::is_same_v<T, std::shared_ptr<VariableDeclarationNode>>;
+                constexpr bool isVariableBinding =
+                    std::is_same_v<T, std::shared_ptr<VariableBindingNode>>;
                 constexpr bool isFunctionDef =
                     std::is_same_v<T, std::shared_ptr<FunctionDefinitionNode>>;
                 constexpr bool isUse =
                     std::is_same_v<T, std::shared_ptr<UseNode>>;
-                if constexpr (isVariableDeclaration) {
-                    interpretVariableDeclaration(arg, scope);
+                if constexpr (isVariableBinding) {
+                    interpretVariableBinding(arg, scope);
                 } else if constexpr (isFunctionDef) {
                     interpretFunctionDefinition(arg, scope);
                 } else if constexpr (isUse) {
@@ -915,6 +892,12 @@ void interpret(const std::string& filename, int argc,
     interpretFile(filename, scope, interpretedStandardHeaders,
                   interpretedFiles);
     if (scope->has("main")) {
+        for (auto standardHeader : interpretedStandardHeaders) {
+            if (standardHeader == "graphics") {
+                interpretGraphics(scope);
+            }
+        }
+
         std::vector<int> commandLineArgs;
         for (std::string arg : args) {
             commandLineArgs.push_back(arg.size());

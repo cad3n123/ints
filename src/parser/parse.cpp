@@ -57,28 +57,35 @@ static std::string nTabs(size_t n) {
 }
 
 RootNode RootNode::parse(std::vector<Token>& tokens) {
-    std::vector<std::variant<std::shared_ptr<VariableDeclarationNode>,
-                             std::shared_ptr<FunctionDefinitionNode>,
-                             std::shared_ptr<UseNode>>>
+    std::vector<std::variant<
+        std::shared_ptr<VariableBindingNode>, std::shared_ptr<FunctionCallNode>,
+        std::shared_ptr<FunctionDefinitionNode>, std::shared_ptr<UseNode>>>
         values;
     size_t numTokens = tokens.size();
     size_t i = 0;
     while (i < numTokens) {
         switch (tokens[i].getType()) {
             case TokenType::IDENTIFIER:
-                if (tokens[i].getValue() == "let") {
-                    values.push_back(std::make_shared<VariableDeclarationNode>(
-                        VariableDeclarationNode::parse(tokens, i)));
-                    expect(tokens, i, "TODO", TokenType::SYMBOL, ";");
-                    ++i;
-                    break;
-                } else if (tokens[i].getValue() == "fn") {
+                if (tokens[i].getValue() == "fn") {
                     values.push_back(std::make_shared<FunctionDefinitionNode>(
                         FunctionDefinitionNode::parse(tokens, i)));
                     break;
                 } else if (tokens[i].getValue() == "use") {
                     values.push_back(
                         std::make_shared<UseNode>(UseNode::parse(tokens, i)));
+                    break;
+                } else {
+                    if (i + 1 < tokens.size() &&
+                        tokens[i + 1] == Token(TokenType::SYMBOL, "(")) {
+                        values.push_back(std::make_shared<FunctionCallNode>(
+                            FunctionCallNode::parse(tokens, i)));
+                    } else {
+                        values.push_back(std::make_shared<VariableBindingNode>(
+                            VariableBindingNode::parse(tokens, i)));
+                    }
+
+                    expect(tokens, i, "TODO", TokenType::SYMBOL, ";");
+                    ++i;
                     break;
                 }
                 [[fallthrough]];
@@ -97,13 +104,17 @@ RootNode::operator std::string() const {
         std::visit(
             [&result](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
-                constexpr bool isVariableDeclaration =
-                    std::is_same_v<T, std::shared_ptr<VariableDeclarationNode>>;
+                constexpr bool isVariableBinding =
+                    std::is_same_v<T, std::shared_ptr<VariableBindingNode>>;
+                constexpr bool isFunctionCall =
+                    std::is_same_v<T, std::shared_ptr<FunctionCallNode>>;
                 constexpr bool isFunctionDef =
                     std::is_same_v<T, std::shared_ptr<FunctionDefinitionNode>>;
                 constexpr bool isUse =
                     std::is_same_v<T, std::shared_ptr<UseNode>>;
-                if constexpr (isVariableDeclaration) {
+                if constexpr (isVariableBinding) {
+                    result += std::string(*arg) + "\n";
+                } else if constexpr (isFunctionCall) {
                     result += std::string(*arg) + "\n";
                 } else if constexpr (isFunctionDef) {
                     result += arg->toStringIndented(0) + "\n";
@@ -117,9 +128,9 @@ RootNode::operator std::string() const {
 }
 
 RootNode::RootNode(
-    std::vector<std::variant<std::shared_ptr<VariableDeclarationNode>,
-                             std::shared_ptr<FunctionDefinitionNode>,
-                             std::shared_ptr<UseNode>>>
+    std::vector<std::variant<
+        std::shared_ptr<VariableBindingNode>, std::shared_ptr<FunctionCallNode>,
+        std::shared_ptr<FunctionDefinitionNode>, std::shared_ptr<UseNode>>>
         values)
     : values(std::move(values)) {}
 
@@ -1139,9 +1150,9 @@ ArrayRangeNode::operator std::string() const {
     return result;
 }
 
-const std::vector<std::variant<std::shared_ptr<VariableDeclarationNode>,
-                               std::shared_ptr<FunctionDefinitionNode>,
-                               std::shared_ptr<UseNode>>>&
+const std::vector<std::variant<
+    std::shared_ptr<VariableBindingNode>, std::shared_ptr<FunctionCallNode>,
+    std::shared_ptr<FunctionDefinitionNode>, std::shared_ptr<UseNode>>>&
 RootNode::getValues() const {
     return values;
 }

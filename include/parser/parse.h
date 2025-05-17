@@ -406,17 +406,20 @@ class RootNode {
  public:
     static RootNode parse(std::vector<Token> &tokens);
     operator std::string() const;
-    const std::vector<std::variant<std::shared_ptr<VariableDeclarationNode>,
-                                   std::shared_ptr<FunctionDefinitionNode>,
-                                   std::shared_ptr<UseNode>>> &
+    const std::vector<std::variant<
+        std::shared_ptr<VariableBindingNode>, std::shared_ptr<FunctionCallNode>,
+        std::shared_ptr<FunctionDefinitionNode>, std::shared_ptr<UseNode>>> &
     getValues() const;
 
  private:
     explicit RootNode(
-        std::vector<std::variant<std::shared_ptr<VariableDeclarationNode>,std::shared_ptr<FunctionDefinitionNode>,
+        std::vector<std::variant<std::shared_ptr<VariableBindingNode>,
+                                 std::shared_ptr<FunctionCallNode>,
+                                 std::shared_ptr<FunctionDefinitionNode>,
                                  std::shared_ptr<UseNode>>>
             values);
-    std::vector<std::variant<std::shared_ptr<VariableDeclarationNode>,std::shared_ptr<FunctionDefinitionNode>,
-                             std::shared_ptr<UseNode>>>
+    std::vector<std::variant<
+        std::shared_ptr<VariableBindingNode>, std::shared_ptr<FunctionCallNode>,
+        std::shared_ptr<FunctionDefinitionNode>, std::shared_ptr<UseNode>>>
         values;
 };
