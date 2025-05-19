@@ -529,17 +529,18 @@ VariableDeclarationNode::VariableDeclarationNode(
       descriptor(descriptor),
       value(std::move(value)) {}
 
-VariableMethodNode VariableMethodNode::parse(std::vector<Token>& tokens,
-                                             size_t& i) {
-    auto identifier =
-        expect(tokens, i, "Variable Method", TokenType::IDENTIFIER).getValue();
-    ++i;
-    return VariableMethodNode(identifier, MethodNode::parse(tokens, i));
-}
+// VariableMethodNode VariableMethodNode::parse(std::vector<Token>& tokens,
+//                                              size_t& i) {
+//     auto identifier =
+//         expect(tokens, i, "Variable Method",
+//         TokenType::IDENTIFIER).getValue();
+//     ++i;
+//     return VariableMethodNode(identifier, MethodNode::parse(tokens, i));
+// }
 
-VariableMethodNode::VariableMethodNode(std::string identifier,
-                                       MethodNode method)
-    : identifier(std::move(identifier)), method(std::move(method)) {}
+// VariableMethodNode::VariableMethodNode(std::string identifier,
+//                                        MethodNode method)
+//     : identifier(std::move(identifier)), method(std::move(method)) {}
 
 VariableAssignmentNode VariableAssignmentNode::parse(std::vector<Token>& tokens,
                                                      size_t& i) {
@@ -906,10 +907,6 @@ VariableDeclarationNode::operator std::string() const {
 
 VariableAssignmentNode::operator std::string() const {
     return left + " = " + std::string(*right);
-}
-
-VariableMethodNode::operator std::string() const {
-    return identifier + std::string(method);
 }
 
 MethodNode::operator std::string() const {

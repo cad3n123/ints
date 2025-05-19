@@ -69,17 +69,6 @@ class MethodNode {
     std::vector<std::shared_ptr<ExpressionNode>> parameters;
 };
 
-class VariableMethodNode {
- public:
-    static VariableMethodNode parse(std::vector<Token> &tokens, size_t &i);
-    operator std::string() const;
-
- private:
-    VariableMethodNode(std::string identifier, MethodNode method);
-    std::string identifier;
-    MethodNode method;
-};
-
 class FunctionCallNode {
  public:
     FunctionCallNode(std::string identifier,
